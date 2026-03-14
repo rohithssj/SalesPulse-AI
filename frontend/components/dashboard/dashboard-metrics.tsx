@@ -48,8 +48,8 @@ export function DashboardMetrics() {
     };
   }, [data]);
 
-  const buyingSignalsDetected = data?.signals?.length || 6;
-  const dealsNeedingFollowUp = data?.needsFollowUp || 5;
+  const buyingSignalsDetected = data?.buyingSignals?.length || 0;
+  const dealsNeedingFollowUp = data?.needsFollowUp || 0;
   const highRiskDeals = healthScoreData.slice(0, 2).reduce((sum, item) => sum + item.count, 0);
 
   const signalsOverTime = data?.signalsOverTime || [
@@ -62,14 +62,15 @@ export function DashboardMetrics() {
     { date: 'Sun', signals: 2 },
   ];
 
-  const recentSignals = data?.recentSignals || [
-    { signal: 'Proposal Request', account: 'TechFlow Inc', time: '2 min ago', confidence: 95 },
-    { signal: 'Pricing Inquiry', account: 'Acme Corp', time: '1 hour ago', confidence: 87 },
-    { signal: 'High Engagement', account: 'CloudBase Systems', time: '2 hours ago', confidence: 92 },
-    { signal: 'Decision Committee Formed', account: 'Enterprise Solutions', time: '3 hours ago', confidence: 88 },
-    { signal: 'Budget Confirmed', account: 'Global Holdings', time: '5 hours ago', confidence: 85 },
-    { signal: 'Inactivity Alert', account: 'DataSync Ltd', time: '1 day ago', confidence: 78 },
-  ];
+  const recentSignals = useMemo(() => {
+    if (!data?.buyingSignals) return [];
+    return data.buyingSignals.map((s: any) => ({
+      signal: s.signal || s.detail || s.type || 'Signal',
+      account: s.account || 'Active Deal',
+      time: s.time || 'Recent',
+      confidence: s.confidence || (s.intentLevel === 'HIGH' ? 95 : 70)
+    })).slice(0, 6);
+  }, [data]);
 
   const COLORS = ['#ef4444', '#f97316', '#22c55e', '#8fb39a'];
 

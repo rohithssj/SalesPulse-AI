@@ -4,12 +4,13 @@ public with sharing class CRMDataService {
     public Account getAccountData(Id accountId) {
         if (accountId == null) return null;
         
-        return [
+        List<Account> accs = [
             SELECT Id, Name, Industry, AnnualRevenue, BillingCity, BillingState 
             FROM Account 
             WHERE Id = :accountId 
             LIMIT 1
         ];
+        return accs.isEmpty() ? null : accs[0];
     }
     
     // Query Opportunities along with related Contacts (via OpportunityContactRoles if needed, or just Account Contacts)

@@ -1,4 +1,4 @@
-export const API_URL = 'http://localhost:4000/api';
+export const API_URL = 'http://localhost:3001/api';
 
 export async function apiFetch(endpoint: string, options?: RequestInit) {
   try {
@@ -25,7 +25,7 @@ export const fetchAccounts = () => apiFetch('/accounts');
 export const fetchStrategy = (params?: any, accountId?: string) => apiFetch(`/strategy${accountId ? `?accountId=${accountId}` : ''}`, { method: 'POST', body: JSON.stringify(params || {}) });
 export const fetchEmail = (params?: any, accountId?: string) => apiFetch(`/email${accountId ? `?accountId=${accountId}` : ''}`, { method: 'POST', body: JSON.stringify(params || {}) });
 export const fetchProposal = (params?: any, accountId?: string) => apiFetch(`/proposal${accountId ? `?accountId=${accountId}` : ''}`, { method: 'POST', body: JSON.stringify(params || {}) });
-export const fetchMeetingPrep = (accountId?: string) => apiFetch(`/meetingPrep${accountId ? `?accountId=${accountId}` : ''}`);
+export const fetchMeetingPrep = (params?: any, accountId?: string) => apiFetch(`/meetingPrep${accountId ? `?accountId=${accountId}` : ''}`, { method: 'POST', body: JSON.stringify(params || {}) });
 export const fetchAccountBrief = (accountId?: string) => apiFetch(`/accountBrief${accountId ? `?accountId=${accountId}` : ''}`);
 
 // --------- NORMALIZATION & TRANSFORMATION FUNCTIONS ---------
@@ -43,7 +43,10 @@ export function normalizeOpportunities(data: any): any[] {
     winProbability: (o.Probability !== undefined) ? o.Probability : (o.winProbability !== undefined ? o.winProbability : Math.floor(Math.random() * 100)),
     closeDate: o.CloseDate || o.closeDate,
     accountId: o.AccountId || o.accountId || 'UnknownAccount',
-    accountName: o.Account?.Name || o.accountName || 'Unknown Account'
+    accountName: o.Account?.Name || o.accountName || 'Unknown Account',
+    healthScore: o.healthScore || 0,
+    healthGrade: o.healthGrade || 'C',
+    recommendedNextAction: o.recommendedNextAction || 'Follow up'
   }));
 }
 
@@ -117,18 +120,24 @@ export function normalizeActivities(data: any): any[] {
   }));
 }
 
+export function normalizeTimeline(data: any): any[] {
+  const acts = normalizeActivities(data);
+  return acts.map(act => ({
+    date: act.activityDate ? new Date(act.activityDate).toISOString().split('T')[0] : 'Recent',
+    event: act.subject,
+    type: act.type.toLowerCase()
+  }));
+}
+
 export function extractSignalsFromActivities(activities: any[]) {
-  // Mock logic to extract signals derived from activities if necessary, or just use raw data if available
-  const types = ['Email Engagement', 'Meeting Scheduled', 'Proposal Request'];
+  // Use real data types if possible, or fall back to descriptive mapping
   return activities.map((act, i) => ({
     id: act.id,
-    type: types[i % types.length],
-    account: 'Account ' + (i + 1),
+    type: act.type || 'Engagement Signal',
+    account: 'Active Account',
     detail: act.subject,
-    severity: (i % 3 === 0) ? 'Critical' : (i % 2 === 0 ? 'High' : 'Medium'),
-    confidence: 50 + (i * 5) % 50,
-    time: act.activityDate,
-    contact: 'Contact ' + i,
-    icon: '⚡'
+    severity: (act.priority === 'High' || act.subject.toLowerCase().includes('urgent')) ? 'High' : 'Medium',
+    confidence: 85,
+    time: act.activityDate ? new Date(act.activityDate).toLocaleDateString() : 'Recent'
   }));
 }

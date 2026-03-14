@@ -12,7 +12,7 @@ const __dirname = path.dirname(__filename);
 dotenv.config({ path: path.resolve(__dirname, '../.env') });
 
 const app = express();
-const PORT = process.env.PORT || 4000;
+const PORT = process.env.PORT || 3001;
 
 // Salesforce Configuration
 const ACCESS_TOKEN = process.env.SALESFORCE_TOKEN;
@@ -50,7 +50,6 @@ app.all('/api/:action', async (req, res) => {
         console.log('Error parsing accountId from request');
     }
 
-    // Default fallback logic only if no ID is provided and it's not the accounts list
     if (!accountId && action !== 'accounts') {
         accountId = await ensureDefaultAccountId();
     }
@@ -60,18 +59,20 @@ app.all('/api/:action', async (req, res) => {
         targetUrl.searchParams.append('accountId', accountId);
     }
     
-    // Forward other query params except accountId (which we already handled)
+    // Forward other query params except accountId
     Object.keys(req.query).forEach(key => {
         if (key !== 'accountId') {
             targetUrl.searchParams.append(key, req.query[key]);
         }
     });
 
-    console.log(`[PROXY] ${req.method} ${action} -> Sending ID: ${accountId || 'None'}`);
+    console.log(`[PROXY] ${req.method} ${action} -> AccountID: ${accountId || 'None'}`);
 
     try {
-        // We always use GET for Apex backend as per controller implementation
-        const response = await axios.get(targetUrl.toString(), {
+        const response = await axios({
+            method: req.method,
+            url: targetUrl.toString(),
+            data: req.body,
             headers: {
                 'Authorization': `Bearer ${ACCESS_TOKEN}`,
                 'Content-Type': 'application/json'

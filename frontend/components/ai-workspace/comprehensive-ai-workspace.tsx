@@ -6,8 +6,8 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { Zap, TrendingUp, FileText, Target, Copy, RefreshCw, Check, AlertCircle, Filter, Loader2 } from 'lucide-react';
-import { fetchCompleteData, fetchEmail, fetchStrategy, normalizeOpportunities, normalizeActivities, extractSignalsFromActivities } from '@/lib/api';
+import { Zap, TrendingUp, FileText, Target, Copy, RefreshCw, Check, AlertCircle, Filter, Loader2, Brain } from 'lucide-react';
+import { fetchCompleteData, fetchEmail, fetchStrategy, fetchAccountBrief, fetchMeetingPrep, fetchProposal, normalizeOpportunities, normalizeActivities, normalizeTimeline, extractSignalsFromActivities } from '@/lib/api';
 import { useAccount } from '@/context/account-context';
 
 const getSeverityColor = (severity: string) => {
@@ -42,11 +42,16 @@ export function ComprehensiveAIWorkspace() {
   const [selectedFilter, setSelectedFilter] = useState('all');
   const [copied, setCopied] = useState(false);
   const [data, setData] = useState<any>(null);
+  const [brief, setBrief] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
   // Email Generation State
   const [generatedEmail, setGeneratedEmail] = useState<string>('');
   const [generatingEmail, setGeneratingEmail] = useState(false);
+
+  // Tone & Content Type State
+  const [selectedTone, setSelectedTone] = useState('Formal');
+  const [selectedContentType, setSelectedContentType] = useState('followup');
 
   // Strategy State
   const [strategyData, setStrategyData] = useState<any>(null);
@@ -55,8 +60,14 @@ export function ComprehensiveAIWorkspace() {
   useEffect(() => {
     if (!selectedAccountId) return;
     setLoading(true);
-    fetchCompleteData(selectedAccountId).then((res) => {
-      setData(res || {});
+    Promise.all([
+      fetchCompleteData(selectedAccountId),
+      fetchAccountBrief(selectedAccountId),
+      fetchStrategy({}, selectedAccountId)
+    ]).then(([completeRes, briefRes, strategyRes]) => {
+      setData(completeRes || {});
+      setBrief(briefRes || {});
+      setStrategyData(strategyRes || null);
       setLoading(false);
     });
   }, [selectedAccountId]);
@@ -66,22 +77,38 @@ export function ComprehensiveAIWorkspace() {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const generateEmailContent = async (type: string) => {
+  const generateEmailContent = async () => {
     setGeneratingEmail(true);
-    const res = await fetchEmail({ type }, selectedAccountId);
-    if (res?.content) {
-      setGeneratedEmail(res.content);
-    } else {
-      setGeneratedEmail("Hi Sarah,\n\nI wanted to follow up on our discussion about custom deployment options. Based on your requirements for 99.99% uptime, I've prepared some tailored solutions. Would you be available for a 20-minute call this week?");
+    try {
+      let endpoint = fetchEmail;
+      if (selectedContentType === 'summary') endpoint = fetchMeetingPrep as any;
+      if (selectedContentType === 'proposal_draft') endpoint = fetchProposal;
+
+      const res = await endpoint({ tone: selectedTone }, selectedAccountId);
+      if (res?.content) {
+        setGeneratedEmail(res.content);
+      } else if (res?.summary) {
+        setGeneratedEmail(res.summary); // Handle different response keys if necessary
+      } else if (res?.notes) {
+        setGeneratedEmail(res.notes); // Handle meetingPrep notes
+      } else {
+        setGeneratedEmail("Error generating content. Please try again.");
+      }
+    } catch (err) {
+      console.error("Content generation failed:", err);
+      setGeneratedEmail("Network error. Please try again.");
     }
     setGeneratingEmail(false);
   };
 
   const loadStrategy = async () => {
-    if (strategyData) return;
     setLoadingStrategy(true);
-    const res = await fetchStrategy({}, selectedAccountId);
-    if (res) setStrategyData(res);
+    try {
+      const res = await fetchStrategy({}, selectedAccountId);
+      if (res) setStrategyData(res);
+    } catch (err) {
+      console.error("Strategy fetch failed:", err);
+    }
     setLoadingStrategy(false);
   };
 
@@ -91,31 +118,34 @@ export function ComprehensiveAIWorkspace() {
     const opps = normalizeOpportunities(data);
     const acts = normalizeActivities(data);
 
-    const bSignals = Array.isArray(data.signals) && data.signals.length > 0 ? data.signals : extractSignalsFromActivities(acts).slice(0, 5);
-    const aTimeline = Array.isArray(data.timeline) ? data.timeline : [
-      { date: '2024-01-15', event: 'Initial Contact', type: 'outreach' },
-      { date: '2024-01-22', event: 'Demo Scheduled', type: 'meeting' },
-      { date: '2024-02-05', event: 'Proposal Sent', type: 'action' },
-      { date: '2024-02-14', event: 'Pricing Discussion', type: 'engagement' },
-      { date: '2024-02-28', event: 'Budget Allocated', type: 'signal' },
+    const bSignals = Array.isArray(data.buyingSignals) && data.buyingSignals.length > 0 
+      ? data.buyingSignals.map((s: any, i: number) => ({
+          id: i,
+          signal: s.keyword || s.signalType,
+          detail: s.quoteContext || s.detail,
+          severity: s.intentLevel || 'Medium',
+          confidence: s.confidence || (s.intentLevel === 'HIGH' ? 95 : 70),
+          time: s.time || 'Recent'
+        }))
+      : extractSignalsFromActivities(acts).slice(0, 5);
+
+    const aTimeline = normalizeTimeline(data).length > 0 ? normalizeTimeline(data) : [
+      { date: 'Recent', event: 'No recent activities found in CRM.', type: 'info' }
     ];
 
-    const dHealthData = opps.slice(0, 5).map((opp: any) => ({ name: opp.name.substring(0, 15) || 'Unknown', score: opp.winProbability }));
+    const dHealthData = opps.slice(0, 5).map((opp: any) => ({ name: (opp.name.substring(0, 15) || 'Unknown'), score: (opp.healthScore || opp.winProbability) }));
     
-    const sFactors = Array.isArray(data.scoreFactors) ? data.scoreFactors : [
-      { factor: 'Engagement Level', weight: 25, value: 95 },
-      { factor: 'Deal Stage Progress', weight: 20, value: 78 },
-      { factor: 'Budget Confirmation', weight: 20, value: 85 },
-      { factor: 'Timeline Alignment', weight: 15, value: 70 },
-      { factor: 'Competitor Activity', weight: 10, value: 45 },
-      { factor: 'Stakeholder Buy-in', weight: 10, value: 88 }
+    const sFactors = [
+      { factor: 'Opportunity Health', weight: 40, value: dHealthData.length > 0 ? Math.round(dHealthData.reduce((a, b) => a + b.score, 0) / dHealthData.length) : 50 },
+      { factor: 'Activity Volume', weight: 30, value: Math.min(100, acts.length * 10) },
+      { factor: 'Signal Intensity', weight: 30, value: bSignals.length * 20 }
     ];
 
     const dScores = opps.slice(0, 5).map((opp: any) => ({
       deal: opp.name,
-      health: opp.winProbability,
+      health: opp.healthScore || opp.winProbability,
       winProb: opp.winProbability,
-      risk: opp.winProbability >= 75 ? 'Low' : opp.winProbability >= 40 ? 'Medium' : 'High',
+      risk: (opp.healthScore || opp.winProbability) >= 75 ? 'Low' : (opp.healthScore || opp.winProbability) >= 40 ? 'Medium' : 'High',
       stage: opp.dealStage
     }));
 
@@ -182,67 +212,101 @@ export function ComprehensiveAIWorkspace() {
                 </Button>
               </div>
               <div className="space-y-2">
-                {buyingSignals.map((signal: any) => (
-                  <div key={signal.id} className="p-3 rounded-lg bg-white/[0.02] border border-white/10 hover:border-white/20 transition-colors">
-                    <div className="flex items-start justify-between gap-2 mb-2">
-                      <p className="text-sm font-medium text-white">{signal.signal || signal.detail || 'Signal'}</p>
-                      <Badge className={`text-[10px] ${getSeverityColor(signal.severity)} border`}>
-                        {signal.severity?.toLowerCase() === 'high' || signal.severity?.toLowerCase() === 'critical' ? '🔴' : '🟡'} {signal.severity || 'Medium'}
-                      </Badge>
+                {buyingSignals.length > 0 ? (
+                  buyingSignals.map((signal: any) => (
+                    <div key={signal.id} className="p-3 rounded-lg bg-white/[0.02] border border-white/10 hover:border-white/20 transition-colors">
+                      <div className="flex items-start justify-between gap-2 mb-2">
+                        <p className="text-sm font-medium text-white">
+                          {signal.signal || signal.detail || signal.type || 'Engagement Signal'}
+                        </p>
+                        <Badge className={`text-[10px] ${getSeverityColor(signal.severity || signal.intentLevel)} border`}>
+                          { (signal.severity || signal.intentLevel)?.toLowerCase() === 'high' || (signal.severity || signal.intentLevel)?.toLowerCase() === 'critical' ? '🔴' : '🟡'} {signal.severity || signal.intentLevel || 'Medium'}
+                        </Badge>
+                      </div>
+                      <p className="text-xs text-[#888]">{signal.account || brief?.accountName || 'Active Account'}</p>
+                      <div className="flex items-center justify-between mt-2">
+                        <span className="text-[10px] text-[#666]">{signal.time || signal.messageDate || 'Recent'}</span>
+                        <span className="text-[10px] font-bold text-primary">{signal.confidence || (signal.intentLevel === 'HIGH' ? 95 : 70)}% confidence</span>
+                      </div>
                     </div>
-                    <p className="text-xs text-[#888]">{signal.account}</p>
-                    <div className="flex items-center justify-between mt-2">
-                      <span className="text-[10px] text-[#666]">{signal.time}</span>
-                      <span className="text-[10px] font-bold text-primary">{signal.confidence || 85}% confidence</span>
-                    </div>
+                  ))
+                ) : (
+                  <div className="flex flex-col items-center justify-center p-8 text-center border border-dashed border-white/10 rounded-lg">
+                    <Zap className="w-8 h-8 text-white/10 mb-2" />
+                    <p className="text-xs text-[#666]">No significant buying signals detected for this account yet.</p>
                   </div>
-                ))}
+                )}
               </div>
             </Card>
 
-            {/* Account Activity Timeline */}
+            {/* Account Intelligence Brief */}
             <Card className="glass luxury-panel border-[#2a2a2a] p-6 rounded-lg">
-              <h3 className="text-sm font-semibold text-white mb-4">Account Activity Timeline</h3>
-              <div className="space-y-3">
-                {accountTimeline.map((item: any, idx: number) => (
-                  <div key={idx} className="flex gap-4">
-                    <div className="flex flex-col items-center">
-                      <div className="w-2 h-2 rounded-full bg-primary mt-1.5" />
-                      {idx !== accountTimeline.length - 1 && <div className="w-px h-8 bg-white/10 my-1" />}
-                    </div>
-                    <div className="flex-1 pb-2">
-                      <p className="text-sm font-medium text-white">{item.event}</p>
-                      <p className="text-xs text-[#888]">{item.date}</p>
-                    </div>
-                  </div>
-                ))}
+              <div className="flex items-center gap-2 mb-4">
+                <Brain className="w-5 h-5 text-secondary" />
+                <h3 className="text-sm font-semibold text-white">Account Intelligence Brief</h3>
+              </div>
+              <div className="p-4 rounded-lg bg-secondary/5 border border-secondary/20 min-h-[140px]">
+                <p className="text-sm text-[#b3b3b3] leading-relaxed italic">
+                  {brief?.summary || "Analyzing account history and recent interactions..."}
+                </p>
+                {brief?.buyingSignal?.keywords && brief.buyingSignal.keywords.length > 0 && (
+                   <div className="mt-4 pt-4 border-t border-secondary/10">
+                     <p className="text-xs font-semibold text-secondary mb-2 uppercase tracking-wider">Detected Interests</p>
+                     <div className="flex flex-wrap gap-2">
+                       {brief.buyingSignal.keywords.map((kw: string, i: number) => (
+                         <Badge key={i} variant="outline" className="text-[10px] bg-secondary/10 border-secondary/30">{kw}</Badge>
+                       ))}
+                     </div>
+                   </div>
+                )}
               </div>
             </Card>
           </div>
+
+          {/* Account Activity Timeline */}
+          <Card className="glass luxury-panel border-[#2a2a2a] p-6 rounded-lg">
+            <h3 className="text-sm font-semibold text-white mb-4">Account Activity Timeline</h3>
+            <div className="space-y-3">
+              {accountTimeline.map((item: any, idx: number) => (
+                <div key={idx} className="flex gap-4">
+                  <div className="flex flex-col items-center">
+                    <div className="w-2 h-2 rounded-full bg-primary mt-1.5" />
+                    {idx !== accountTimeline.length - 1 && <div className="w-px h-8 bg-white/10 my-1" />}
+                  </div>
+                  <div className="flex-1 pb-2">
+                    <p className="text-sm font-medium text-white">{item.event}</p>
+                    <p className="text-xs text-[#888]">{item.date}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Card>
 
           {/* Engagement Insights */}
           <Card className="glass luxury-panel border-[#2a2a2a] p-6 rounded-lg">
             <h3 className="text-sm font-semibold text-white mb-4">Engagement Insights</h3>
             <div className="grid grid-cols-4 gap-4">
               <div className="p-4 rounded-lg bg-white/[0.02] border border-white/10">
-                <p className="text-xs text-[#888] mb-2">Email Opens</p>
-                <p className="text-2xl font-bold text-primary">12</p>
-                <p className="text-xs text-success mt-1">↑ 3 this week</p>
+                <p className="text-xs text-[#888] mb-2">Opportunities</p>
+                <p className="text-2xl font-bold text-primary">{normalizeOpportunities(data).length}</p>
+                <p className="text-xs text-primary mt-1">Active Deals</p>
               </div>
               <div className="p-4 rounded-lg bg-white/[0.02] border border-white/10">
-                <p className="text-xs text-[#888] mb-2">Link Clicks</p>
-                <p className="text-2xl font-bold text-secondary">8</p>
-                <p className="text-xs text-success mt-1">↑ 5 yesterday</p>
+                <p className="text-xs text-[#888] mb-2">Buying Intent</p>
+                <p className="text-2xl font-bold text-secondary">{brief?.buyingSignal?.level || 'LOW'}</p>
+                <p className="text-xs text-secondary mt-1">Signal Strength</p>
               </div>
               <div className="p-4 rounded-lg bg-white/[0.02] border border-white/10">
-                <p className="text-xs text-[#888] mb-2">Meetings Attended</p>
-                <p className="text-2xl font-bold text-warning">3</p>
-                <p className="text-xs text-[#888] mt-1">Last: 2 days ago</p>
+                <p className="text-xs text-[#888] mb-2">Activities</p>
+                <p className="text-2xl font-bold text-warning">{normalizeActivities(data).length}</p>
+                <p className="text-xs text-[#888] mt-1">Recent touches</p>
               </div>
               <div className="p-4 rounded-lg bg-white/[0.02] border border-white/10">
-                <p className="text-xs text-[#888] mb-2">Response Rate</p>
-                <p className="text-2xl font-bold text-success">67%</p>
-                <p className="text-xs text-success mt-1">↑ Above average</p>
+                <p className="text-xs text-[#888] mb-2">Deal Pipeline</p>
+                <p className="text-2xl font-bold text-success">
+                  ${(normalizeOpportunities(data).reduce((sum, o) => sum + o.dealValue, 0) / 1000).toFixed(0)}K
+                </p>
+                <p className="text-xs text-success mt-1">Total Value</p>
               </div>
             </div>
           </Card>
@@ -341,33 +405,41 @@ export function ComprehensiveAIWorkspace() {
             </h3>
 
             <div className="grid grid-cols-2 gap-3 mb-6">
-              <Button onClick={() => generateEmailContent('followup')} className="gap-2 bg-white/10 hover:bg-white/20 text-white border border-white/20 h-12 justify-start">
+              <Button 
+                onClick={() => setSelectedContentType('followup')} 
+                className={`gap-2 ${selectedContentType === 'followup' ? 'bg-primary/20 border-primary/50' : 'bg-white/10 border-white/20'} hover:bg-white/20 text-white border h-12 justify-start`}
+              >
                 <FileText className="w-4 h-4" />
                 <div className="text-left">
                   <div className="text-xs font-semibold">Follow-up Email</div>
                   <div className="text-[10px] text-[#888]">Gentle check-in</div>
                 </div>
               </Button>
-              <Button onClick={() => generateEmailContent('summary')} className="gap-2 bg-white/10 hover:bg-white/20 text-white border border-white/20 h-12 justify-start">
+              <Button 
+                onClick={() => setSelectedContentType('summary')} 
+                className={`gap-2 ${selectedContentType === 'summary' ? 'bg-primary/20 border-primary/50' : 'bg-white/10 border-white/20'} hover:bg-white/20 text-white border h-12 justify-start`}
+              >
                 <FileText className="w-4 h-4" />
                 <div className="text-left">
                   <div className="text-xs font-semibold">Meeting Summary</div>
                   <div className="text-[10px] text-[#888]">Quick recap</div>
                 </div>
               </Button>
-              <Button onClick={() => generateEmailContent('proposal')} className="gap-2 bg-white/10 hover:bg-white/20 text-white border border-white/20 h-12 justify-start">
+              <Button 
+                onClick={() => setSelectedContentType('proposal_draft')} 
+                className={`gap-2 ${selectedContentType === 'proposal_draft' ? 'bg-primary/20 border-primary/50' : 'bg-white/10 border-white/20'} hover:bg-white/20 text-white border h-14 justify-start`}
+              >
                 <FileText className="w-4 h-4" />
                 <div className="text-left">
-                  <div className="text-xs font-semibold">Proposal Draft</div>
-                  <div className="text-[10px] text-[#888]">Full proposal</div>
+                  <div className="text-xs font-semibold">Sales Proposal</div>
+                  <div className="text-[10px] text-[#888]">Full doc generation</div>
                 </div>
               </Button>
-              <Button onClick={() => generateEmailContent('account_summary')} className="gap-2 bg-white/10 hover:bg-white/20 text-white border border-white/20 h-12 justify-start">
-                <FileText className="w-4 h-4" />
-                <div className="text-left">
-                  <div className="text-xs font-semibold">Account Summary</div>
-                  <div className="text-[10px] text-[#888]">Overview</div>
-                </div>
+              <Button 
+                onClick={generateEmailContent} 
+                className="bg-primary hover:bg-primary/90 text-white font-bold h-14"
+              >
+                Generate Agent Content
               </Button>
             </div>
 
@@ -378,7 +450,13 @@ export function ComprehensiveAIWorkspace() {
                 </label>
                 <div className="flex gap-2">
                   {['Formal', 'Friendly', 'Persuasive'].map((tone) => (
-                    <Button key={tone} size="sm" variant="outline" className="text-xs border-white/20">
+                    <Button 
+                      key={tone} 
+                      size="sm" 
+                      onClick={() => setSelectedTone(tone)}
+                      variant={selectedTone === tone ? 'default' : 'outline'} 
+                      className={`text-xs ${selectedTone === tone ? 'bg-primary text-white' : 'border-white/20'}`}
+                    >
                       {tone}
                     </Button>
                   ))}
@@ -405,7 +483,7 @@ export function ComprehensiveAIWorkspace() {
                   <Copy className="w-4 h-4" />
                   {copied ? 'Copied!' : 'Copy Email'}
                 </Button>
-                <Button onClick={() => generateEmailContent('followup')} className="flex-1 gap-2 bg-white/10 hover:bg-white/20 text-white border border-white/20">
+                <Button onClick={() => generateEmailContent()} className="flex-1 gap-2 bg-white/10 hover:bg-white/20 text-white border border-white/20">
                   <RefreshCw className="w-4 h-4" />
                   Regenerate
                 </Button>
@@ -432,11 +510,21 @@ export function ComprehensiveAIWorkspace() {
                   <>
                     <p className="text-sm font-semibold text-success mb-2">✓ Recommended Action</p>
                     <p className="text-sm text-[#b3b3b3]">
-                      {strategyData?.recommendation || "Schedule immediate closing call with Sarah Johnson (CFO) and tech team. Propose phased implementation to address their timeline concerns while securing commitment on budget."}
+                      {strategyData?.recommendedNextAction || strategyData?.recommendation || "Analyzing latest deal signals to determine optimal next step..."}
                     </p>
-                    {(!strategyData && !loadingStrategy) && (
+                    <div className="mt-4 flex gap-4">
+                       <div className="flex-1 p-3 rounded bg-black/20 border border-success/20">
+                         <p className="text-[10px] text-success/70 uppercase">Win Probability</p>
+                         <p className="text-xl font-bold text-success">{strategyData?.winProbability || strategyData?.healthScore || 0}%</p>
+                       </div>
+                       <div className="flex-1 p-3 rounded bg-black/20 border border-success/20">
+                         <p className="text-[10px] text-success/70 uppercase">Health Grade</p>
+                         <p className="text-xl font-bold text-success">{strategyData?.healthGrade || 'B'}</p>
+                       </div>
+                    </div>
+                    {!strategyData && !loadingStrategy && (
                       <Button onClick={loadStrategy} size="sm" className="mt-4 bg-success/20 hover:bg-success/30 text-success border-success/30 text-xs gap-1 h-7">
-                        <RefreshCw className="w-3 h-3" /> Fetch Latest Strategy
+                        <RefreshCw className="w-3 h-3" /> Fetch Predicted Strategy
                       </Button>
                     )}
                   </>
@@ -444,12 +532,19 @@ export function ComprehensiveAIWorkspace() {
               </div>
 
               <div>
+                <h4 className="text-sm font-semibold text-white mb-3">Long-term Strategy</h4>
+                <div className="p-4 rounded-lg bg-blue-500/5 border border-blue-500/20 text-sm text-[#b3b3b3]">
+                  {strategyData?.strategyRecommendation || "Fetch strategy to see AI-generated long-term plan."}
+                </div>
+              </div>
+
+              <div>
                 <h4 className="text-sm font-semibold text-white mb-3">Action Priority Ranking</h4>
                 <div className="space-y-2">
                   {(strategyData?.priorities || [
-                    { title: "Schedule Executive Closing Call", desc: "This week - Critical for close probability", badge: "🔴 Critical", color: "red-500" },
-                    { title: "Send Tailored Proposal", desc: "Within 24 hours - Customize for their needs", badge: "🟡 High", color: "warning" },
-                    { title: "Prepare Implementation Timeline", desc: "Before call - Show phased approach", badge: "🔵 Medium", color: "blue-500" }
+                    { title: "Schedule Executive Closing Call", desc: "Critical for close probability", badge: "🔴 Critical", color: "red-500" },
+                    { title: "Send Tailored Proposal", desc: "Customize for their specific technical needs", badge: "🟡 High", color: "warning" },
+                    { title: "Prepare Implementation Timeline", desc: "Show phased approach for faster ROI", badge: "🔵 Medium", color: "blue-500" }
                   ]).map((item: any, idx: number) => (
                     <div key={idx} className="flex items-center justify-between p-3 rounded-lg bg-white/[0.02] border border-white/10">
                       <div>

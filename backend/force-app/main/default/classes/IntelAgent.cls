@@ -18,11 +18,20 @@ public with sharing class IntelAgent {
         
         if (!opps.isEmpty()) {
             List<EmailMessage> emails = dataService.getRecentEmails(recordId);
-            BuyingSignalDetector detector = new BuyingSignalDetector();
-            List<BuyingSignalDetector.SignalResult> signals = detector.detectSignals(emails);
+            List<Task> tasks = dataService.getRecentTasks(recordId);
             
-            for(BuyingSignalDetector.SignalResult signal : signals) {
-                detectedKeywords.add(signal.keyword);
+            BuyingSignalDetector detector = new BuyingSignalDetector();
+            List<BuyingSignalDetector.SignalResult> emailSignals = detector.detectSignals(emails);
+            List<BuyingSignalDetector.SignalResult> taskSignals = detector.detectSignalsFromTasks(tasks);
+            
+            List<BuyingSignalDetector.SignalResult> allSignals = new List<BuyingSignalDetector.SignalResult>();
+            allSignals.addAll(emailSignals);
+            allSignals.addAll(taskSignals);
+            
+            for(BuyingSignalDetector.SignalResult signal : allSignals) {
+                if (!detectedKeywords.contains(signal.keyword)) {
+                    detectedKeywords.add(signal.keyword);
+                }
                 if(signal.intentLevel == 'HIGH') {
                     intentLevel = 'HIGH';
                 } else if(signal.intentLevel == 'MEDIUM' && intentLevel != 'HIGH') {

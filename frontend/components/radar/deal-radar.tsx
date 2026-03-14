@@ -33,10 +33,11 @@ export function DealRadar() {
   const deals: Deal[] = useMemo(() => {
     if (!rawOpps.length) return [];
     return rawOpps.map((opp, i) => {
-      const prob = opp.winProbability || 0;
+      // Use healthScore if available, otherwise fallback to winProbability
+      const score = opp.healthScore !== undefined ? opp.healthScore : opp.winProbability || 0;
       let status: 'healthy' | 'moderate' | 'risk' = 'moderate';
-      if (prob >= 70) status = 'healthy';
-      else if (prob <= 40) status = 'risk';
+      if (score >= 70) status = 'healthy';
+      else if (score <= 40) status = 'risk';
 
       return {
         id: opp.id,
@@ -44,7 +45,7 @@ export function DealRadar() {
         value: opp.dealValue || 0,
         status,
         angle: (i * (360 / Math.max(rawOpps.length, 1))) % 360,
-        distance: Math.max(0.2, 1 - (prob / 100))
+        distance: Math.max(0.2, 1 - (score / 100))
       };
     });
   }, [rawOpps]);

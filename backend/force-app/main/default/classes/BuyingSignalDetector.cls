@@ -20,8 +20,37 @@ public with sharing class BuyingSignalDetector {
         'pricing discussion' => 25,
         'next steps' => 20,
         'schedule a demo' => 15,
-        'interested' => 10
+        'interested' => 10,
+        'follow up' => 5,
+        'questions' => 5,
+        'help' => 5,
+        'demo' => 15,
+        'pricing' => 20,
+        'proposal' => 30,
+        'call' => 10,
+        'meeting' => 15,
+        'ai platform' => 30,
+        'integration' => 25,
+        'enterprise support' => 20,
+        'security' => 25,
+        'automation' => 30
     };
+
+    // Scan Task subjects and descriptions
+    public List<SignalResult> detectSignalsFromTasks(List<Task> tasks) {
+        List<SignalResult> detectedSignals = new List<SignalResult>();
+        if (tasks == null || tasks.isEmpty()) return detectedSignals;
+        
+        for (Task t : tasks) {
+            String text = (t.Subject + ' ' + (t.Description != null ? t.Description : '')).toLowerCase();
+            for (String keyword : KEYWORD_SCORES.keySet()) {
+                if (text.contains(keyword)) {
+                    detectedSignals.add(new SignalResult(keyword, classifyIntent(KEYWORD_SCORES.get(keyword)), 'Task: ' + t.Subject));
+                }
+            }
+        }
+        return detectedSignals;
+    }
 
     // Scan email bodies and detect buying signals
     public List<SignalResult> detectSignals(List<EmailMessage> emails) {
