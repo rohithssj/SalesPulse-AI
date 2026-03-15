@@ -3,7 +3,7 @@
 
 import { parseAIResponse } from './api';
 
-const PROXY_BASE = process.env.NEXT_PUBLIC_PROXY_URL || 'http://localhost:3001';
+const PROXY_BASE = process.env.NEXT_PUBLIC_PROXY_URL || process.env.REACT_APP_SF_PROXY_URL || '';
 const STORAGE_KEY = 'salespulse_uploaded_data';
 
 // ── Detect upload mode ──
@@ -44,12 +44,12 @@ export interface GenerateParams {
   context?:      string;
 }
 
-// ── UPLOAD MODE: call /generate — never touches Salesforce ──
+// ── UPLOAD MODE: call /api/generate — never touches Salesforce ──
 const generateViaContext = async (
   context: string
 ): Promise<string> => {
   try {
-    const res = await fetch(`${PROXY_BASE}/generate`, {
+    const res = await fetch(`${PROXY_BASE}/api/generate`, {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
       body:    JSON.stringify({ context, maxTokens: 1200 }),

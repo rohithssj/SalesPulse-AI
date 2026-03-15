@@ -7,12 +7,17 @@ const nextConfig = {
     unoptimized: true,
   },
   async rewrites() {
-    return [
-      {
-        source: '/api/:path*',
-        destination: 'http://localhost:3001/api/:path*',
-      },
-    ];
+    // Only rewrite to local proxy if EXPLICITLY in local dev and proxy is intended.
+    // Otherwise, let it fall through to /api serverless functions.
+    if (process.env.NODE_ENV === 'development') {
+      return [
+        {
+          source: '/api/:path*',
+          destination: 'http://localhost:3001/api/:path*',
+        },
+      ];
+    }
+    return [];
   },
 }
 

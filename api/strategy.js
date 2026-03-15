@@ -1,6 +1,8 @@
+import { getAccessToken } from './auth-helper.js';
+
 export default async function handler(req, res) {
   const INSTANCE_URL = process.env.INSTANCE_URL || process.env.REACT_APP_SF_ORG_URL;
-  const ACCESS_TOKEN = process.env.SALESFORCE_TOKEN || process.env.SF_ACCESS_TOKEN;
+  const ACCESS_TOKEN = await getAccessToken();
   const ACTION = 'strategy';
 
   if (!INSTANCE_URL) {
@@ -50,16 +52,27 @@ export default async function handler(req, res) {
 
     const response = await fetch(url.toString(), options);
     const text = await response.text();
+    
+    console.log(`[API strategy] SF Response: ${response.status}`);
+
     let data;
     try {
       data = text ? JSON.parse(text) : {};
     } catch(e) {
-      data = text;
+      console.warn('[API strategy] Failed to parse JSON:', text);
+      data = { error: 'Invalid JSON from Salesforce', raw: text };
     }
 
     res.status(response.status).json(data);
   } catch (error) {
-    console.error(`API Error (${ACTION}):`, error.message);
-    res.status(500).json({ error: error.message });
+    console.error(`[API ERROR] (${ACTION}):`, {
+        message: error.message,
+        stack: error.stack
+    });
+    res.status(500).json({ 
+        error: 'Backend request failed', 
+        details: error.message,
+        action: ACTION
+    });
   }
 }

@@ -26,7 +26,9 @@ const dealData = {
   id: 'DEAL-2024-001',
   name: 'Enterprise Solutions - Full Platform',
   account: 'Enterprise Solutions Inc',
+  contact: 'Sarah Johnson',
   value: 450000,
+  formattedValue: '$450K',
   stage: 'Negotiation',
   probability: 78,
   health: 85,
@@ -34,6 +36,7 @@ const dealData = {
   nextStepDate: '2024-02-25',
   createdDate: '2024-01-15',
   estimatedClose: '2024-03-15',
+  daysLeft: 10,
 };
 
 const dealTimeline = [
