@@ -1,7 +1,11 @@
 export default async function handler(req, res) {
-  const INSTANCE_URL = process.env.INSTANCE_URL;
-  const ACCESS_TOKEN = process.env.SALESFORCE_TOKEN;
+  const INSTANCE_URL = process.env.INSTANCE_URL || process.env.REACT_APP_SF_ORG_URL;
+  const ACCESS_TOKEN = process.env.SALESFORCE_TOKEN || process.env.SF_ACCESS_TOKEN;
   const ACTION = 'completeData';
+
+  if (!INSTANCE_URL) {
+    return res.status(500).json({ error: 'INSTANCE_URL not configured' });
+  }
 
   try {
     const url = new URL(`${INSTANCE_URL}/services/apexrest/salesforge/${ACTION}`);
