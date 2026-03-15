@@ -1,23 +1,19 @@
-import { getAccessToken } from './auth-helper.js';
+import { NextRequest, NextResponse } from 'next/server';
+import { getSalesforceAccessToken } from '@/lib/salesforce';
 
-// No node-fetch import needed in Node 18+ / Vercel
-export default async function handler(req, res) {
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
-  }
-
-  const { context, maxTokens = 1200 } = req.body;
-  const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
-  const ACCESS_TOKEN = await getAccessToken();
-  const INSTANCE_URL = process.env.INSTANCE_URL || process.env.REACT_APP_SF_ORG_URL;
-  const SF_BASE = `${INSTANCE_URL}/services/apexrest/salesforge`;
-
-  if (!context || !context.trim()) {
-    return res.status(400).json({ error: 'Context is required' });
-  }
-
+export async function POST(req: NextRequest) {
   try {
-    // 1. Path 1: Anthropic API (if key is set)
+    const { context, maxTokens = 1200 } = await req.json();
+
+    if (!context || !context.trim()) {
+      return NextResponse.json({ error: 'context is required' }, { status: 400 });
+    }
+
+    const INSTANCE_URL = process.env.SALESFORCE_INSTANCE_URL || process.env.INSTANCE_URL || process.env.REACT_APP_SF_ORG_URL;
+    const APEX_BASE_URL = `${INSTANCE_URL}/services/apexrest/salesforge`;
+    const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
+
+    // ── Path 1: Anthropic API (if key is set) ──
     if (ANTHROPIC_API_KEY) {
       try {
         const response = await fetch('https://api.anthropic.com/v1/messages', {
@@ -37,20 +33,21 @@ export default async function handler(req, res) {
         if (response.ok) {
           const data = await response.json();
           const text = data?.content?.[0]?.text || '';
-          return res.json({ result: text });
+          return NextResponse.json({ result: text });
         }
-      } catch (err) {
-        console.error('[Vercel api/generate] Anthropic error:', err.message);
+      } catch (err: any) {
+        console.error('[API generate] Anthropic error:', err.message);
       }
     }
 
-    // 2. Path 2: Salesforce strategy endpoint
-    if (ACCESS_TOKEN && INSTANCE_URL) {
+    // ── Path 2: Salesforce strategy endpoint ──
+    const token = await getSalesforceAccessToken();
+    if (token) {
       try {
-        const sfResponse = await fetch(`${SF_BASE}/strategy`, {
+        const sfResponse = await fetch(`${APEX_BASE_URL}/strategy`, {
           method: 'POST',
           headers: {
-            Authorization:  `Bearer ${ACCESS_TOKEN}`,
+            Authorization:  `Bearer ${token}`,
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
@@ -62,16 +59,14 @@ export default async function handler(req, res) {
         
         if (sfResponse.ok) {
           const data = await sfResponse.json();
-          return res.json(data);
+          return NextResponse.json(data);
         }
-      } catch (err) {
-        console.error('[Vercel api/generate] Salesforce path error:', err.message);
+      } catch (err: any) {
+        console.error('[API generate] Salesforce path error:', err.message);
       }
     }
 
-    // 3. Path 3: Return structured fallback
-    console.log('[Vercel api/generate] All paths failed — returning structured fallback');
-
+    // ── Path 3: Return structured fallback ──
     const accountMatch = context.match(/ACCOUNT:\s*([^\n|]+)/i);
     const contactMatch = context.match(/CONTACT:\s*([^\n|(]+)/i);
     const stageMatch   = context.match(/STAGE:\s*([^\n|]+)/i);
@@ -97,24 +92,20 @@ export default async function handler(req, res) {
 
     if (isProposal) {
       fallbackText = `SALES PROPOSAL — ${account}\n\nEXECUTIVE SUMMARY\nWe propose a customized solution for ${account}${value ? ` valued at ${value}` : ''}. Our platform directly addresses your key challenges and delivers measurable ROI.\n\nSOLUTION OVERVIEW\nBased on your signals (${signal}), we recommend a phased implementation starting with core modules.\n\nKEY BENEFITS\n• Immediate operational efficiency gains\n• Scalable architecture for long-term growth  \n• Dedicated implementation and support team\n\nROI PROJECTION\nClients in similar stages typically see payback within 6-9 months.\n\nNEXT STEPS\nSchedule a 30-minute review call to finalize terms and timeline.\nTarget close: ${days} days`;
-
     } else if (isMeeting) {
       fallbackText = `CALL PREPARATION — ${contact} at ${account}\n\nCALL OBJECTIVE\nAdvance deal from ${stage} stage and confirm next commitments.\n\nOPENING LINE\n"Hi ${contact}, thanks for your time today. I wanted to make sure we're aligned on next steps and address anything on your end before we move forward."\n\nKEY TALKING POINTS\n1. Reinforce value — reference ${signal} as proof of interest\n2. Address any blockers that came up since last conversation\n3. Confirm timeline — ${days} days to target close date\n\nQUESTIONS TO ASK\n1. What would need to be true for you to feel confident moving forward?\n2. Are there any internal approvals still pending on your side?\n3. Who else needs to be part of the final decision?\n\nOBJECTION HANDLING\n• "Need more time" → "Understood — what specific milestone are you waiting on?"\n• "Price concern" → "Let's talk ROI — what's the cost of this problem going unsolved?"\n\nCLOSING\n"Can we agree on one specific next step with a date before we wrap up today?"`;
-
     } else if (isStrategy) {
       fallbackText = `ENGAGEMENT STRATEGY — ${account}\n\nSITUATION\nDeal at ${stage} stage with ${prob} win probability. ${days} days to close. Signals detected: ${signal}.\n\nPRIORITY ACTIONS — NEXT 48 HOURS\n1. Send personalized email to ${contact} referencing ${signal} specifically\n2. Schedule ${parseFloat(prob) > 70 ? 'closing call' : 'discovery call'} within 48 hours\n3. Prepare one-page value summary tailored to ${account}\n\nKEY RISKS\n• Deal stalling without timely follow-up — reach out within 24 hours\n• ${parseFloat(prob) < 60 ? 'Below 60% probability — identify and address main blocker immediately' : 'Maintain momentum — do not let deal go cold'}\n\nRECOMMENDED NEXT ACTION\n${parseFloat(prob) > 70 ? `Push for commitment — this deal is close to closing. Send a direct call-to-action today.` : `Build urgency by connecting your solution directly to the signals: ${signal}.`}`;
-
     } else if (isReengage) {
       fallbackText = `Subject: Something valuable for ${account}\n\nHi ${contact},\n\nI've been thinking about ${account}'s goals and wanted to share something relevant. Given the developments in your space around ${signal}, I believe there's a timely opportunity worth exploring together.\n\nOur recent work with similar companies has produced some results I think you'd find valuable — happy to share a quick summary.\n\nWould a 10-minute call work this week? Just a yes or no is helpful.\n\nBest regards,\nYour Account Executive`;
-
     } else {
       fallbackText = `Subject: Following up — ${account}\n\nHi ${contact},\n\nI wanted to reach out following our recent discussions. Based on the ${signal} we've observed from ${account}, I believe now is a great time to connect and discuss next steps.\n\n${value ? `Given the scope of what we discussed (${value}), I want to make sure we address everything on your end before moving forward.` : 'I want to make sure we address any outstanding questions on your end.'}\n\nWould you have 15 minutes this week for a brief call?\n\nBest regards,\nYour Account Executive`;
     }
 
-    return res.json({ result: fallbackText });
+    return NextResponse.json({ result: fallbackText });
 
-  } catch (error) {
-    console.error('Final Catch (api/generate):', error.message);
-    res.status(500).json({ error: error.message });
+  } catch (error: any) {
+    console.error('[API generate] Final Error:', error.message);
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
