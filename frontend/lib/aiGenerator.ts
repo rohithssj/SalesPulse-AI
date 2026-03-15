@@ -52,16 +52,22 @@ const generateViaContext = async (
     const res = await fetch(`${PROXY_BASE}/generate`, {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ context, maxTokens: 1000 }),
+      body:    JSON.stringify({ context, maxTokens: 1200 }),
     });
+
     if (!res.ok) {
-      console.warn('Generate endpoint failed:', res.status);
-      return '';
+      const errText = await res.text().catch(() => '');
+      console.warn(`[generateViaContext] ${res.status} error:`, errText);
+      return ''; // caller handles empty
     }
+
     const data = await res.json();
-    return data.result || '';
+    const text = parseAIResponse(data);
+    console.log(`[generateViaContext] Got ${text.length} chars`);
+    return text;
+
   } catch (err) {
-    console.warn('Generate endpoint error:', err);
+    console.warn('[generateViaContext] Network error:', err);
     return '';
   }
 };
@@ -133,26 +139,40 @@ export const generateAIContent = async (
   const uploadModeActive = isUploadMode();
   const hasSFId    = isValidSalesforceId(accountId);
 
+  console.log(`[aiGenerator] type=${type} uploadMode=${uploadModeActive} hasSFId=${hasSFId}`);
+
   let result = '';
 
   if (uploadModeActive || !hasSFId) {
-    // UPLOAD MODE or invalid SF ID:
-    // Build context and call /generate directly (Isolates from Salesforce)
+    // Upload mode — call /generate, never Salesforce
     const context = params.context || buildContext(params);
-    console.log(`[Upload Mode] Generating ${type} via /generate isolation layer`);
+    console.log(`[aiGenerator] Upload mode — calling /generate`);
+
     result = await generateViaContext(context);
+
+    if (!result || result.trim() === '') {
+      console.warn(`[aiGenerator] /generate returned empty — using inline fallback`);
+      result = buildFallback(params);
+    }
+
   } else {
-    // SALESFORCE MODE: real SF ID — call SF endpoint
-    console.log(`[SF Mode] Generating ${type} via Salesforce for ${accountId}`);
+    // Salesforce mode
+    console.log(`[aiGenerator] SF mode — calling API`);
     result = await generateViaSalesforce(params);
+
+    if (!result || result.trim() === '') {
+      console.warn(`[aiGenerator] SF call returned empty — using inline fallback`);
+      result = buildFallback(params);
+    }
   }
 
-  // If both paths failed — return professional fallback
+  // FINAL safety net — should never be empty
   if (!result || result.trim() === '') {
-    console.warn(`[aiGenerator] Generation failed for ${type} — using fallback`);
-    return buildFallback(params);
+    console.error(`[aiGenerator] All paths produced empty result for ${type}`);
+    result = buildFallback(params);
   }
 
+  console.log(`[aiGenerator] Final result length: ${result.length}`);
   return result;
 };
 

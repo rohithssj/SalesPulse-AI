@@ -98,6 +98,11 @@ export function AIWorkspacePanel() {
   
   const [tone, setTone] = useState<'formal' | 'friendly' | 'persuasive'>('formal');
   const [emailType, setEmailType] = useState('follow-up');
+
+  // New state from prompt for Generate tab
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [generatedSubject, setGeneratedSubject] = useState('');
+  const [generatedBody, setGeneratedBody] = useState('');
   const [emailData, setEmailData] = useState<any>({ subject: '', content: '' });
 
   const [intelData, setIntelData] = useState<any>(null);
@@ -159,61 +164,79 @@ export function AIWorkspacePanel() {
     }
   }, [activeTab, selectedAccountId, strategyData, selectedAccount]);
 
+  const emailTypeMap: Record<string, GenerationType> = {
+    'follow-up':     'followup',
+    'followup':      'followup',
+    'cold-outreach': 'email',
+    'meeting-recap': 'meetingPrep',
+    'proposal':      'proposal',
+    're-engagement': 'reengagement',
+    'reengagement':  'reengagement',
+  };
+
   const handleGenerate = async () => {
-    if (!selectedAccountId && !isUploadMode) return;
-    setLoadingEmail(true);
-    
+    setIsGenerating(true);
+    setGeneratedSubject('');
+    setGeneratedBody('');
+
+    const deals   = getSelectedAccountDeals();
+    const signals = getSelectedAccountSignals();
+    const topDeal = deals[0];
+
+    const genType: GenerationType =
+      emailTypeMap[emailType?.toLowerCase() || 'followup'] || 'followup';
+
+    console.log(`[EmailAIWorkspace] Generating ${genType} for ${selectedAccount?.name}`);
+
     try {
-      const deals = getSelectedAccountDeals();
-      const topDeal = deals[0];
-      const signals = getSelectedAccountSignals();
-
-      let aiType: GenerationType = 'email';
-      if (emailType === 'proposal') aiType = 'proposal';
-      if (emailType === 'meeting-recap') aiType = 'meetingPrep';
-
-      const baseContext = `Generate a ${tone} ${emailType.replace('-', ' ')} for ${selectedAccount?.name || 'the account'}. 
-        Industry: ${selectedAccount?.industry || 'enterprise'}.
-        Tone: ${tone}.
-        Buying signals: ${intelData?.buyingSignals?.join(', ') || 'recent engagement'}.
-        Make it personal, specific, and include a clear call to action.`;
-
-      const generatedStr = await generateAIContent({
-        type: aiType,
-        accountId: selectedAccountId || undefined,
+      const content = await generateAIContent({
+        type:        genType,
+        accountId:   selectedAccount?.id || selectedAccountId,
         accountName: selectedAccount?.name || 'Account',
-        contactName: selectedAccount?.primaryContact || 'Contact',
-        stage: topDeal?.stage || 'Qualification',
-        value: topDeal?.formattedValue || topDeal?.value || '$0',
+        contactName: selectedAccount?.primaryContact || topDeal?.contact || 'Contact',
+        stage:       topDeal?.stage || 'Qualification',
+        value:       topDeal?.formattedValue || topDeal?.value?.toString() || '$0',
         probability: topDeal?.probability || 65,
-        daysLeft: topDeal?.daysLeft || 30,
+        daysLeft:    topDeal?.daysLeft || 30,
         signals,
-        industry: selectedAccount?.industry || 'Technology',
-        tone: tone,
-        context: baseContext
+        industry:    selectedAccount?.industry || 'Technology',
+        tone:        tone || 'Formal',
+        dealName:    topDeal?.name || '',
       });
 
-      setEmailData({ 
-        subject: CONTENT_LABELS[emailType]?.title || 'Generated Content', 
-        content: generatedStr, 
-        type: emailType, 
-        tone 
-      });
+      console.log(`[EmailAIWorkspace] Got content length: ${content.length}`);
+
+      const subjectMatch = content.match(/^Subject:\s*(.+)$/im);
+      if (subjectMatch) {
+        setGeneratedSubject(subjectMatch[1].trim());
+        const bodyWithoutSubject = content
+          .replace(/^Subject:\s*.+\n?/im, '')
+          .trim();
+        setGeneratedBody(bodyWithoutSubject);
+      } else {
+        const subjectMap: Record<string, string> = {
+          followup:    `Following up — ${selectedAccount?.name || 'Account'}`,
+          email:       `Connecting with ${selectedAccount?.name || 'Account'}`,
+          proposal:    `Proposal for ${selectedAccount?.name || 'Account'}`,
+          meetingPrep: `Meeting recap — ${selectedAccount?.name || 'Account'}`,
+          reengagement:`Reconnecting — ${selectedAccount?.name || 'Account'}`,
+        };
+        setGeneratedSubject(subjectMap[genType] || `Email — ${selectedAccount?.name}`);
+        setGeneratedBody(content);
+      }
     } catch (err) {
       console.error('Email generation failed:', err);
-      setEmailData({
-        subject: 'Generation Failed',
-        content: 'Failed to generate content. Please try again.',
-        type: emailType,
-        tone
-      });
+      setGeneratedSubject('Generation Failed');
+      setGeneratedBody('Failed to generate content. Please try again.');
     }
-    setLoadingEmail(false);
+
+    setIsGenerating(false);
   };
 
   const onTypeChange = (type: string) => {
     setEmailType(type);
-    setEmailData({ subject: '', content: '' }); // Clear previous output
+    setGeneratedSubject('');
+    setGeneratedBody('');
   };
 
   const handleCopy = () => {
@@ -258,65 +281,73 @@ export function AIWorkspacePanel() {
             <div className="flex justify-center p-8">
               <Loader2 className="w-8 h-8 animate-spin text-primary" />
             </div>
+          ) : !intelData ? (
+             <p style={{ color: '#6b7280', fontSize: '13px' }}>
+                Select an account to view intelligence.
+             </p>
           ) : (
-            <div className="space-y-4">
-              <div className="flex items-start justify-between pb-4 border-b border-white/10">
-                <div>
-                  <h4 className="text-sm font-semibold text-white">Acme Corp - Account Summary</h4>
-                  <p className="text-xs text-[#888] mt-1">Last interaction: {intelData?.lastInteractionDate || '2 days ago'}</p>
+             <div>
+                {/* Account header */}
+                <div style={{ display: 'flex', justifyContent: 'space-between',
+                  alignItems: 'center', marginBottom: '12px' }}>
+                  <p style={{ color: '#f9fafb', fontSize: '14px',
+                    fontWeight: 600, margin: 0 }}>
+                    {selectedAccount?.name || "Account"}
+                  </p>
+                  <span style={{
+                    fontSize: '11px', fontWeight: 700,
+                    padding: '3px 10px', borderRadius: '20px',
+                    background: (intelData.engagementLevel || 'high') === 'high'   ? '#14532d'
+                      : (intelData.engagementLevel || 'high') === 'medium' ? '#92400e' : '#1e3a5f',
+                    color: (intelData.engagementLevel || 'high') === 'high'   ? '#86efac'
+                      : (intelData.engagementLevel || 'high') === 'medium' ? '#fde68a' : '#93c5fd',
+                  }}>
+                    {intelData.engagementLevel || 'high'} Engagement
+                  </span>
                 </div>
-                <Badge className={`${getEngagementColor(intelData?.engagementLevel || 'high')} border`}>
-                  {(intelData?.engagementLevel || 'high') === 'high' ? '🔥 High Engagement' : 'Medium Engagement'}
-                </Badge>
-              </div>
 
-              <div className="space-y-3">
-                <div>
-                  <h5 className="text-xs font-semibold text-[#a3a3a3] uppercase tracking-wider mb-2">
-                    Buying Signals Detected ({intelData?.buyingSignals?.length || 0})
-                  </h5>
-                  <div className="space-y-2">
-                    {(intelData?.buyingSignals || []).map((signal: string, idx: number) => (
-                      <div
-                        key={idx}
-                        className="flex items-center gap-2 text-sm text-[#b3b3b3] p-2 rounded-lg bg-white/[0.02] border border-success/20"
-                      >
-                        <span className="text-success">✓</span>
-                        {signal}
+                {/* Summary */}
+                <p style={{ color: '#d1d5db', fontSize: '13px',
+                  lineHeight: '1.7', margin: '0 0 14px' }}>
+                  {intelData.summary || `Last interaction was ${intelData.lastInteractionDate || 'recently'}. Mapped ${intelData.emailCount || 0} recent interactions highlighting key requirements.`}
+                </p>
+
+                {/* Buying signals */}
+                {intelData.buyingSignals && intelData.buyingSignals.length > 0 && (
+                  <div style={{ marginBottom: '12px' }}>
+                    <p style={{ color: '#6b7280', fontSize: '11px',
+                      textTransform: 'uppercase', letterSpacing: '0.05em',
+                      margin: '0 0 6px', fontWeight: 600 }}>
+                      BUYING SIGNALS DETECTED ({intelData.buyingSignals.length})
+                    </p>
+                    {intelData.buyingSignals.map((s: string, i: number) => (
+                      <div key={i} style={{ display: 'flex',
+                        alignItems: 'center', gap: '8px', marginBottom: '5px' }}>
+                        <span style={{ color: '#22c55e', fontSize: '12px' }}>✓</span>
+                        <span style={{ color: '#d1d5db', fontSize: '13px' }}>{s}</span>
                       </div>
                     ))}
                   </div>
-                </div>
+                )}
 
-                <div>
-                  <h5 className="text-xs font-semibold text-[#a3a3a3] uppercase tracking-wider mb-2">
-                    Key Discussion Points
-                  </h5>
-                  <div className="space-y-2">
-                    {(intelData?.keyPoints || []).map((point: string, idx: number) => (
-                      <div
-                        key={idx}
-                        className="flex items-start gap-2 text-sm text-[#b3b3b3] p-2 rounded-lg bg-white/[0.02]"
-                      >
-                        <span className="text-primary flex-shrink-0 mt-0.5">•</span>
-                        <span>{point}</span>
+                {/* Key discussion points */}
+                {intelData.keyPoints && intelData.keyPoints.length > 0 && (
+                  <div>
+                    <p style={{ color: '#6b7280', fontSize: '11px',
+                      textTransform: 'uppercase', letterSpacing: '0.05em',
+                      margin: '0 0 6px', fontWeight: 600 }}>
+                      KEY DISCUSSION POINTS
+                    </p>
+                    {intelData.keyPoints.map((p: string, i: number) => (
+                      <div key={i} style={{ display: 'flex',
+                        gap: '8px', marginBottom: '4px' }}>
+                        <span style={{ color: '#6366f1', flexShrink: 0 }}>•</span>
+                        <span style={{ color: '#d1d5db', fontSize: '13px' }}>{p}</span>
                       </div>
                     ))}
                   </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3 pt-3">
-                  <div className="p-3 rounded-lg bg-white/[0.02] border border-white/10">
-                    <div className="text-xs text-[#888] mb-1">Email Interactions</div>
-                    <div className="text-xl font-bold text-white">{intelData?.emailCount || 8}</div>
-                  </div>
-                  <div className="p-3 rounded-lg bg-white/[0.02] border border-white/10">
-                    <div className="text-xs text-[#888] mb-1">Days Since Last Touch</div>
-                    <div className="text-xl font-bold text-white">{intelData?.daysSinceLastTouch || 2}</div>
-                  </div>
-                </div>
-              </div>
-            </div>
+                )}
+             </div>
           )}
         </TabsContent>
 
@@ -377,25 +408,29 @@ export function AIWorkspacePanel() {
             </p>
             <input
               type="text"
-              value={emailData.subject}
+              value={generatedSubject}
+              onChange={e => setGeneratedSubject(e.target.value)}
               placeholder="Subject will appear here..."
               className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-[#666] focus:outline-none focus:border-primary/50"
-              readOnly
+              readOnly={isGenerating}
             />
           </div>
 
           <div className="space-y-3 relative">
             <div className="relative">
-              {loadingEmail && (
+              {isGenerating && (
                 <div className="absolute inset-0 z-10 bg-[#121212]/50 flex items-center justify-center rounded-md backdrop-blur-sm">
                   <Loader2 className="w-8 h-8 animate-spin text-primary" />
                 </div>
               )}
-              <Textarea
-                value={emailData.content}
-                placeholder="Genrated content will appear here..."
-                readOnly
-                className="min-h-48 bg-white/5 border border-white/10 text-white text-sm resize-none relative z-0"
+              <textarea
+                value={generatedBody}
+                onChange={e => setGeneratedBody(e.target.value)}
+                placeholder={isGenerating
+                  ? '⟳ Generating content...'
+                  : 'Generated content will appear here...'}
+                readOnly={isGenerating}
+                className="w-full min-h-48 bg-white/5 border border-white/10 text-white text-sm resize-none rounded-lg p-3 focus:outline-none focus:border-primary/50 relative z-0"
               />
             </div>
           </div>
@@ -403,17 +438,44 @@ export function AIWorkspacePanel() {
           <div className="flex gap-2">
             <Button
               size="sm"
-              onClick={handleCopy}
+              onClick={() => {
+                const full = generatedSubject
+                  ? `Subject: ${generatedSubject}\n\n${generatedBody}`
+                  : generatedBody;
+                navigator.clipboard.writeText(full);
+                copy(full);
+              }}
+              disabled={!generatedBody}
               className="flex-1 gap-2 bg-white/10 hover:bg-white/20 text-white border border-white/20"
             >
               <Copy className="w-4 h-4" />
               {copied ? '✓ Copied!' : 'Copy to Clipboard'}
             </Button>
-            <Button size="sm" onClick={handleGenerate} disabled={loadingEmail} className="flex-1 gap-2 bg-white/10 hover:bg-white/20 text-white border border-white/20">
-              <RotateCw className={`w-4 h-4 ${loadingEmail ? 'animate-spin' : ''}`} />
-              Generate
+            <Button size="sm" onClick={handleGenerate} disabled={isGenerating} className="flex-1 gap-2 bg-white/10 hover:bg-white/20 text-white border border-white/20">
+              <RotateCw className={`w-4 h-4 ${isGenerating ? 'animate-spin' : ''}`} />
+              {isGenerating ? '⟳ Generating...' : '↻ Generate'}
             </Button>
-            <Button size="sm" className="flex-1 gap-2 bg-primary hover:bg-primary/90 text-white">
+            <Button 
+              size="sm" 
+              className="flex-1 gap-2 bg-primary hover:bg-primary/90 text-white"
+              disabled={!generatedBody}
+              onClick={() => {
+                if (!generatedBody) return;
+                const key = 'salespulse_templates';
+                const existing = JSON.parse(localStorage.getItem(key) || '[]');
+                const newTemplate = {
+                  id:          `tmpl_${Date.now()}`,
+                  name:        generatedSubject || `${emailType} template`,
+                  subject:     generatedSubject,
+                  body:        generatedBody,
+                  category:    emailType || 'general',
+                  createdAt:   new Date().toISOString(),
+                  usageCount:  0,
+                };
+                localStorage.setItem(key, JSON.stringify([newTemplate, ...existing]));
+                alert('Template saved!');
+              }}
+            >
               <Save className="w-4 h-4" />
               Save Template
             </Button>
