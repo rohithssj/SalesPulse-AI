@@ -1,4 +1,4 @@
-export const API_URL = 'http://localhost:3001/api';
+export const API_URL = (process.env.REACT_APP_SF_PROXY_URL || 'http://localhost:3001') + '/api';
 
 export async function apiFetch(endpoint: string, options?: RequestInit) {
   try {

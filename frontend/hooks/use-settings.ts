@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react';
 const DEFAULT_SETTINGS = {
   // Salesforce
   salesforceConnected: false,
-  salesforceOrgUrl: 'https://orgfarm-a0a66fa8a5-dev-ed.develop.my.salesforce.com',
+  salesforceOrgUrl: process.env.REACT_APP_SF_ORG_URL || '',
   salesforceLastSync: null,
 
   // Notifications

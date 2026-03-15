@@ -14,6 +14,7 @@ import { SettingsSelect } from '@/components/settings/settings-select';
 import { SectionHeader } from '@/components/settings/section-header';
 import { ComingSoonPanel } from '@/components/settings/coming-soon-panel';
 import { useAccount } from '@/context/account-context';
+import { maskOrgUrl } from '@/utils/mask-credentials';
 
 const settingsSections = [
   {
@@ -88,7 +89,8 @@ export function SettingsContent() {
   const testSalesforceConnection = async () => {
     setConnectionStatus('testing');
     try {
-      const res = await fetch('http://localhost:3001/api/accounts');
+      const proxyUrl = process.env.REACT_APP_SF_PROXY_URL || 'http://localhost:3001';
+      const res = await fetch(`${proxyUrl}/api/accounts`);
       if (res.ok) {
         setConnectionStatus('connected');
         updateSetting('salesforceConnected', true);
@@ -119,8 +121,9 @@ export function SettingsContent() {
     setIsSyncing(true);
     setSyncResult(null);
     try {
+      const proxyUrl = process.env.REACT_APP_SF_PROXY_URL || 'http://localhost:3001';
       const res = await fetch(
-        `http://localhost:3001/api/completeData?accountId=${selectedAccountId}`
+        `${proxyUrl}/api/completeData?accountId=${selectedAccountId}`
       );
       if (!res.ok) throw new Error('Sync failed');
       const data = await res.json();
@@ -233,9 +236,26 @@ export function SettingsContent() {
 
                       <div style={{ marginBottom: '12px' }}>
                         <p style={{ color: '#6b7280', fontSize: '11px', textTransform:'uppercase', letterSpacing:'0.05em', margin:'0 0 4px' }}>Org URL</p>
-                        <p style={{ color: '#d1d5db', fontSize: '13px', fontFamily: 'monospace', background: '#1f2937', padding: '8px 12px', borderRadius: '6px', border: '1px solid #374151', margin: 0 }}>
-                          {settings.salesforceOrgUrl}
-                        </p>
+                        <div style={{ position: 'relative' }}>
+                          <p style={{ 
+                            color: '#d1d5db', fontSize: '13px', fontFamily: 'monospace', 
+                            background: '#1f2937', padding: '8px 12px', borderRadius: '6px', 
+                            border: '1px solid #374151', margin: 0,
+                            letterSpacing: '0.02em'
+                          }}>
+                            {maskOrgUrl(settings.salesforceOrgUrl)}
+                          </p>
+                          <span style={{
+                            position: 'absolute', right: '10px', top: '50%',
+                            transform: 'translateY(-50%)',
+                            background: '#1e3a5f', color: '#60a5fa',
+                            fontSize: '10px', fontWeight: '700',
+                            padding: '2px 8px', borderRadius: '4px',
+                            textTransform: 'uppercase', letterSpacing: '0.05em'
+                          }}>
+                            🔒 Secured
+                          </span>
+                        </div>
                       </div>
 
                       {settings.lastSyncTime && (

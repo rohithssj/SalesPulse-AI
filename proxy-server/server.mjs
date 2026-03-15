@@ -4,6 +4,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { maskOrgUrl } from './utils/mask-credentials.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -14,12 +15,23 @@ dotenv.config({ path: path.resolve(__dirname, '../.env') });
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-// Salesforce Configuration
-const ACCESS_TOKEN = process.env.SALESFORCE_TOKEN;
-const INSTANCE_URL = process.env.INSTANCE_URL;
-const APEX_BASE_URL = `${INSTANCE_URL}/services/apexrest/salesforge`;
+// Validate on startup — fail loudly if missing
+if (!process.env.REACT_APP_SF_ORG_URL) {
+  console.error('❌ REACT_APP_SF_ORG_URL is not set in .env — proxy will not work');
+  process.exit(1);
+}
+if (!process.env.SF_ACCESS_TOKEN) {
+  console.error('❌ SF_ACCESS_TOKEN is not set in .env — proxy will not work');
+  process.exit(1);
+}
 
-app.use(cors());
+// Salesforce Configuration
+const ACCESS_TOKEN = process.env.SF_ACCESS_TOKEN;
+const INSTANCE_URL = process.env.REACT_APP_SF_ORG_URL;
+const APEX_BASE_URL = `${INSTANCE_URL}/services/apexrest/salesforge`;
+const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:3000';
+
+app.use(cors({ origin: FRONTEND_URL }));
 app.use(express.json());
 
 // Helper to get first account ID if none provided
@@ -86,7 +98,8 @@ app.all('/api/:action', async (req, res) => {
 });
 
 app.listen(PORT, () => {
-    console.log(`Proxy server running at http://localhost:${PORT}`);
-    console.log(`Target: ${APEX_BASE_URL}`);
+    console.log(`✅ Proxy running on port ${PORT}`);
+    const masked = maskOrgUrl(process.env.REACT_APP_SF_ORG_URL);
+    console.log(`🔗 Connected to: ${masked}`);
     ensureDefaultAccountId();
 });

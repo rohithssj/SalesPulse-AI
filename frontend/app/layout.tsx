@@ -21,6 +21,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
+      <head>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" async></script>
+      </head>
       <body className="font-sans antialiased bg-background text-foreground min-h-screen">
         <AccountProvider>
           <Sidebar />

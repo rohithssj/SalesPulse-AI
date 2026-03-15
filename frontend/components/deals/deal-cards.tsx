@@ -7,6 +7,7 @@ import { fetchCompleteData, normalizeOpportunities, fetchEmail, fetchStrategy } 
 import { getDealColor, getStageBorderColor } from '@/lib/deal-colors';
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard';
 import { GeneratedContentModal } from '../email/generated-content-modal';
+import { parseApiResponse } from '@/utils/parse-api-response';
 
 interface Deal {
   id: string;
@@ -88,8 +89,11 @@ export function DealCards() {
           Make all advice specific to the ${deal.dealStage} stage and ${deal.winProbability}% probability context.`
       }, selectedAccountId);
 
-      const generated = res?.email?.body || res?.content || res?.result || (typeof res === 'string' ? res : JSON.stringify(res));
-      setModalContent(generated || 'Failed to generate plan.');
+      const data = await res.json();
+      console.log('Engage API raw response:', JSON.stringify(data, null, 2));
+
+      const generated = parseApiResponse(data);
+      setModalContent(generated);
     } catch (err) {
       setModalContent('Error generating engagement plan. Please try again.');
     } finally {
@@ -123,8 +127,11 @@ export function DealCards() {
         context: context
       }, selectedAccountId);
 
-      const tipsText = res?.strategy || res?.content || res?.result || (typeof res === 'string' ? res : JSON.stringify(res));
-      setTips(prev => ({ ...prev, [deal.id]: tipsText || 'No tips available.' }));
+      const data = await res.json();
+      console.log(`AI Tips raw response for ${deal.name}:`, JSON.stringify(data, null, 2));
+
+      const tipsText = parseApiResponse(data);
+      setTips(prev => ({ ...prev, [deal.id]: tipsText }));
     } catch (err) {
       setTips(prev => ({ ...prev, [deal.id]: 'Failed to load tips.' }));
     } finally {
