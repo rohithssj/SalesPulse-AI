@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAccount } from '@/context/account-context';
-import { fetchEmail } from '@/lib/api';
+import { fetchEmail, parseResponse } from '@/lib/api';
 import { GeneratedContentModal } from './generated-content-modal';
 import { useTemplates, EmailTemplate } from '@/hooks/use-templates';
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard';
@@ -54,7 +54,7 @@ export function TemplatesPanel() {
           Reference their industry (${selectedAccount?.Industry || 'technology'}) if relevant.`
       }, selectedAccountId);
 
-      const generated = res?.email?.body || res?.content || res?.result || (typeof res === 'string' ? res : JSON.stringify(res));
+      const generated = parseResponse(res);
       setModalContent(generated || template.preview);
     } catch (err) {
       setModalContent('Failed to personalize template. Using default preview.\n\n' + template.preview);

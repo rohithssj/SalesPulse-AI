@@ -3,28 +3,23 @@
 import { useState, useEffect } from 'react';
 import { TrendingUp, Users, Calendar, Zap, Loader2, Copy, X } from 'lucide-react';
 import { useAccount } from '@/context/account-context';
-import { fetchCompleteData, normalizeOpportunities, fetchEmail, fetchStrategy } from '@/lib/api';
+import { fetchCompleteData, normalizeOpportunities, fetchEmail, fetchStrategy, parseResponse } from '@/lib/api';
 import { getDealColor, getStageBorderColor } from '@/lib/deal-colors';
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard';
 import { GeneratedContentModal } from '../email/generated-content-modal';
-import { parseApiResponse } from '@/utils/parse-api-response';
 
-interface Deal {
-  id: string;
-  name: string;
-  company: string;
-  value: number;
-  stage: string;
-  probability: number;
-  daysLeft: number;
-  status: 'healthy' | 'moderate' | 'risk';
-  contact: string;
-}
+import { buildEngagementPlanContext, buildAITipsContext } from '@/lib/contextBuilder';
+import { parseAnyResponse } from '@/lib/responseParser';
+import { usePageData } from '@/hooks/usePageData';
 
 export function DealCards() {
   const { selectedAccountId } = useAccount();
+  const { data: dealsData, loading } = usePageData(
+    '/completeData',
+    (gd: any) => gd.deals
+  );
+  
   const [deals, setDeals] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
   const { copied, copy } = useCopyToClipboard();
 
   // AI Functionality State
@@ -38,15 +33,14 @@ export function DealCards() {
   const [loadingTips, setLoadingTips] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
-    if (!selectedAccountId) return;
-    setLoading(true);
-    fetchCompleteData(selectedAccountId).then(data => {
-      if (data) {
-        setDeals(normalizeOpportunities(data).slice(0, 5));
+    if (dealsData) {
+      if ((dealsData as any).opportunities !== undefined || Array.isArray(dealsData)) {
+        setDeals(normalizeOpportunities(dealsData).slice(0, 5));
+      } else {
+        setDeals((dealsData as any[]).slice(0, 5));
       }
-      setLoading(false);
-    });
-  }, [selectedAccountId]);
+    }
+  }, [dealsData]);
 
   const daysColor = (days: number) => {
     if (days <= 2) return '#ef4444';   // red — critical
@@ -68,32 +62,18 @@ export function DealCards() {
         contactName: deal.contact || 'Customer',
         tone: "Formal",
         type: "engage",
-        emailType: "deal_engagement",
-        dealStage: deal.dealStage,
-        dealValue: deal.dealValue,
-        daysLeft: deal.daysLeft || 7,
-        probability: deal.winProbability,
-        context: `Generate a deal engagement action plan for ${deal.name} with ${deal.accountName}.
-          Current stage: ${deal.dealStage}.
-          Deal value: ${deal.dealValue}.
-          Probability: ${deal.winProbability}%.
-          Days remaining: ${deal.daysLeft || 7} days.
-          Primary contact: ${deal.contact || 'Customer'}.
-          
-          Provide:
-          1. A personalized outreach email to ${deal.contact || 'Customer'} appropriate for the ${deal.dealStage} stage
-          2. Three specific next actions the sales rep should take in the next 48 hours
-          3. Key objections likely at this stage and how to handle them
-          4. Suggested meeting agenda if a call is needed
-          
-          Make all advice specific to the ${deal.dealStage} stage and ${deal.winProbability}% probability context.`
+        context: buildEngagementPlanContext({
+          dealName: deal.name,
+          accountName: deal.accountName,
+          contactName: deal.contact || 'Customer',
+          stage: deal.dealStage,
+          value: deal.dealValue,
+          probability: deal.winProbability,
+          daysLeft: deal.daysLeft || 7,
+        })
       }, selectedAccountId);
 
-      const data = await res.json();
-      console.log('Engage API raw response:', JSON.stringify(data, null, 2));
-
-      const generated = parseApiResponse(data);
-      setModalContent(generated);
+      setModalContent(parseAnyResponse(res));
     } catch (err) {
       setModalContent('Error generating engagement plan. Please try again.');
     } finally {
@@ -112,26 +92,20 @@ export function DealCards() {
 
     setLoadingTips(prev => ({ ...prev, [deal.id]: true }));
     try {
-      const stageContexts: Record<string, string> = {
-        'Proposal': `The deal "${deal.name}" with ${deal.accountName} is in Proposal stage at ${deal.winProbability}% probability. Generate 4 tactical AI tips...`,
-        'Negotiation': `The deal "${deal.name}" with ${deal.accountName} is in Negotiation stage at ${deal.winProbability}% probability. Generate 4 tactical AI tips...`,
-        'Prospecting': `The deal "${deal.name}" with ${deal.accountName} is in early Prospecting stage at ${deal.winProbability}%. Generate 4 qualification tips...`,
-        'Qualification': `The deal "${deal.name}" with ${deal.accountName} is in Qualification stage at ${deal.winProbability}%. Generate BANT tips...`,
-        'default': `The deal "${deal.name}" with ${deal.accountName} is in ${deal.dealStage} stage at ${deal.winProbability}%. Generate tactical tips...`
-      };
-
-      const context = stageContexts[deal.dealStage] || stageContexts['default'];
-
       const res = await fetchStrategy({
         accountId: deal.accountId,
-        context: context
+        context: buildAITipsContext({
+          dealName: deal.name,
+          accountName: deal.accountName,
+          contactName: deal.contact || 'Customer',
+          stage: deal.dealStage,
+          value: deal.dealValue,
+          probability: deal.winProbability,
+          daysLeft: deal.daysLeft || 7,
+        })
       }, selectedAccountId);
 
-      const data = await res.json();
-      console.log(`AI Tips raw response for ${deal.name}:`, JSON.stringify(data, null, 2));
-
-      const tipsText = parseApiResponse(data);
-      setTips(prev => ({ ...prev, [deal.id]: tipsText }));
+      setTips(prev => ({ ...prev, [deal.id]: parseAnyResponse(res) }));
     } catch (err) {
       setTips(prev => ({ ...prev, [deal.id]: 'Failed to load tips.' }));
     } finally {

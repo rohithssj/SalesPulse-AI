@@ -6,37 +6,37 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useAccount } from '@/context/account-context';
-import { fetchCompleteData, fetchEmail } from '@/lib/api';
+import { fetchCompleteData, fetchEmail, postEmail } from '@/lib/api';
+import { usePageData } from '@/hooks/usePageData';
 import { GeneratedContentModal } from './generated-content-modal';
+import { parseAnyResponse } from '@/lib/responseParser';
+import { buildFollowUpContext } from '@/lib/contextBuilder';
 
 export function EmailAlertsPanel() {
   const { accounts, selectedAccountId } = useAccount();
-  const selectedAccount = accounts.find(a => a.Id === selectedAccountId);
-  const [data, setData] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+  const selectedAccount = accounts.find(a => (a as any).Id === selectedAccountId || (a as any).id === selectedAccountId);
+  
+  const { data, loading } = usePageData(
+    '/completeData',
+    (gd) => gd
+  );
+  
   const [modalOpen, setModalOpen] = useState(false);
   const [modalContent, setModalContent] = useState('');
   const [modalTitle, setModalTitle] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationProgress, setGenerationProgress] = useState<number | null>(null);
 
-  useEffect(() => {
-    if (!selectedAccountId) return;
-    setLoading(true);
-    fetchCompleteData(selectedAccountId).then(res => {
-      setData(res);
-      setLoading(false);
-    });
-  }, [selectedAccountId]);
-
-  const emailAlerts = (data?.signals || []).filter((s: any) => s.signal?.includes('Email') || s.signal?.includes('Follow-up')).map((s: any, idx: number) => ({
+  const emailAlerts = ((data as any)?.signals || [] as any[]).filter((s: any) => s.signal?.includes('Email') || s.signal?.includes('Follow-up')).map((s: any, idx: number) => ({
     id: String(idx),
     type: s.signal?.includes('Urgent') ? 'urgent' : 'follow_up',
     title: s.signal || 'Email Follow-up',
     description: `AI recommended follow-up for ${s.account || 'Recent Contact'}.`,
     dealName: s.account || 'Unknown Account',
+    accountName: s.account || 'Unknown Account',
     daysOverdue: s.confidence > 90 ? 3 : 0,
     priority: s.confidence > 85 ? 'high' : 'medium',
+    confidence: s.confidence || 80,
     action: 'Quick Draft'
   }));
 
@@ -47,8 +47,10 @@ export function EmailAlertsPanel() {
       title: 'Follow-up needed',
       description: 'Scheduled outreach based on recent engagement',
       dealName: 'Recent Salesforce Contacts',
+      accountName: 'Recent Salesforce Contacts',
       daysOverdue: 0,
       priority: 'medium',
+      confidence: 70,
       action: 'Quick Draft'
     }
   ];
@@ -62,16 +64,21 @@ export function EmailAlertsPanel() {
     try {
       const res = await fetchEmail({
         accountId: selectedAccountId,
-        accountName: selectedAccount?.Name,
+        accountName: alert.accountName,
         tone: 'Friendly',
         type: 'followup',
-        emailType: 'scheduled_outreach',
-        context: `Scheduled outreach based on recent engagement with ${selectedAccount?.Name || alert.dealName}. This is a timely follow-up to maintain momentum. Alert: ${alert.title}. ${alert.description}.`,
-        urgency: (alert.priority as any) || "medium"
+        context: buildFollowUpContext({
+          accountName: alert.accountName,
+          contactName: 'Prospect',
+          stage: 'Evaluation',
+          value: 'N/A',
+          probability: alert.confidence,
+          signals: [alert.title, alert.description],
+          daysLeft: 14,
+        })
       });
       
-      const content = res?.email?.body || res?.content || (typeof res === 'string' ? res : JSON.stringify(res));
-      setModalContent(content);
+      setModalContent(parseAnyResponse(res));
     } catch (err) {
       setModalContent('Failed to generate draft. Please try again.');
     } finally {
@@ -200,11 +207,11 @@ export function EmailAlertsPanel() {
         <h4 className="text-sm font-semibold text-white mb-4">Email Activity Summary</h4>
         <div className="grid grid-cols-4 gap-4">
           <div className="text-center">
-            <div className="text-2xl font-bold text-primary">{data?.emailsSentToday || 0}</div>
+            <div className="text-2xl font-bold text-primary">{(data as any)?.emailsSentToday || 0}</div>
             <p className="text-xs text-[#888] mt-2">Emails Sent Today</p>
           </div>
           <div className="text-center">
-            <div className="text-2xl font-bold text-success">{data?.openRate || '0%'}</div>
+            <div className="text-2xl font-bold text-success">{(data as any)?.openRate || '0%'}</div>
             <p className="text-xs text-[#888] mt-2">Open Rate</p>
           </div>
           <div className="text-center">

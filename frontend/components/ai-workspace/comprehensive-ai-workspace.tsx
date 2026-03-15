@@ -7,8 +7,18 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { Zap, TrendingUp, FileText, Target, Copy, RefreshCw, Check, AlertCircle, Filter, Loader2, Brain } from 'lucide-react';
-import { fetchCompleteData, fetchEmail, fetchStrategy, fetchAccountBrief, fetchMeetingPrep, fetchProposal, normalizeOpportunities, normalizeActivities, normalizeTimeline, extractSignalsFromActivities } from '@/lib/api';
+import { fetchCompleteData, postEmail, postStrategy, fetchAccountBrief, postMeetingPrep, postProposal, normalizeOpportunities, normalizeActivities, normalizeTimeline, extractSignalsFromActivities } from '@/lib/api';
 import { useAccount } from '@/context/account-context';
+import { parseAnyResponse } from '@/lib/responseParser';
+import { 
+  buildFollowUpContext, 
+  buildMeetingSummaryContext, 
+  buildEngagementPlanContext,
+  buildCallPrepContext
+} from '@/lib/contextBuilder';
+import { RenderedContent } from '../shared/RenderedContent';
+import { usePageData } from '@/hooks/usePageData';
+import { useDataSource } from '@/context/DataSourceContext';
 
 const getSeverityColor = (severity: string) => {
   switch (severity?.toLowerCase()) {
@@ -38,12 +48,20 @@ const getRiskColor = (risk: string) => {
 };
 
 export function ComprehensiveAIWorkspace() {
-  const { selectedAccountId } = useAccount();
+  const { 
+    isUploadMode, globalData, selectedAccount, 
+    source, getSelectedAccountSignals
+  } = useDataSource();
+  
+  const { data, loading } = usePageData(
+    '/completeData',
+    (ctx) => ctx.globalData
+  );
+  
   const [selectedFilter, setSelectedFilter] = useState('all');
   const [copied, setCopied] = useState(false);
-  const [data, setData] = useState<any>(null);
   const [brief, setBrief] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+  const [strategyData, setStrategyData] = useState<any>(null);
 
   // Email Generation State
   const [generatedEmail, setGeneratedEmail] = useState<string>('');
@@ -54,23 +72,15 @@ export function ComprehensiveAIWorkspace() {
   const [selectedContentType, setSelectedContentType] = useState('followup');
 
   // Strategy State
-  const [strategyData, setStrategyData] = useState<any>(null);
   const [loadingStrategy, setLoadingStrategy] = useState(false);
 
   useEffect(() => {
-    if (!selectedAccountId) return;
-    setLoading(true);
-    Promise.all([
-      fetchCompleteData(selectedAccountId),
-      fetchAccountBrief(selectedAccountId),
-      fetchStrategy({}, selectedAccountId)
-    ]).then(([completeRes, briefRes, strategyRes]) => {
-      setData(completeRes || {});
-      setBrief(briefRes || {});
-      setStrategyData(strategyRes || null);
-      setLoading(false);
-    });
-  }, [selectedAccountId]);
+    if (!data) return;
+    
+    // Attempt to extract brief/strategy if present in the data blob
+    if ((data as any).brief) setBrief((data as any).brief);
+    if ((data as any).strategy) setStrategyData((data as any).strategy);
+  }, [data]);
 
   const handleCopy = () => {
     setCopied(true);
@@ -80,20 +90,45 @@ export function ComprehensiveAIWorkspace() {
   const generateEmailContent = async () => {
     setGeneratingEmail(true);
     try {
-      let endpoint = fetchEmail;
-      if (selectedContentType === 'summary') endpoint = fetchMeetingPrep as any;
-      if (selectedContentType === 'proposal_draft') endpoint = fetchProposal;
+      let context = '';
+      const commonParams = {
+        accountName: selectedAccount?.name || (selectedAccount as any)?.Name || 'Active Account',
+        contactName: selectedAccount?.primaryContact || (selectedAccount as any)?.Primary_Contact__r?.Name || 'Prospect',
+        stage: selectedAccount?.deals?.[0]?.stage || 'Evaluation',
+        value: selectedAccount?.revenue || 0,
+        probability: selectedAccount?.deals?.[0]?.probability || 75,
+        daysLeft: selectedAccount?.deals?.[0]?.daysLeft || 14,
+      };
 
-      const res = await endpoint({ tone: selectedTone }, selectedAccountId);
-      if (res?.content) {
-        setGeneratedEmail(res.content);
-      } else if (res?.summary) {
-        setGeneratedEmail(res.summary); // Handle different response keys if necessary
-      } else if (res?.notes) {
-        setGeneratedEmail(res.notes); // Handle meetingPrep notes
-      } else {
-        setGeneratedEmail("Error generating content. Please try again.");
+      if (selectedContentType === 'followup') {
+        context = buildFollowUpContext(commonParams);
+      } else if (selectedContentType === 'summary') {
+        context = buildMeetingSummaryContext({
+          ...commonParams,
+          attendees: ['Key Stakeholder'],
+          keyPoints: ['Interest in Enterprise plan', 'Timeline clarified'],
+          followUpActions: ['Send tech specs'],
+        });
+      } else if (selectedContentType === 'proposal_draft') {
+        context = buildEngagementPlanContext({
+          ...commonParams,
+          dealName: 'Active Deal',
+          signals: ['Positive feedback', 'Budget allocated'],
+        });
       }
+
+      let endpoint = postEmail;
+      if (selectedContentType === 'summary') endpoint = postMeetingPrep;
+      if (selectedContentType === 'proposal_draft') endpoint = postProposal;
+
+      const res = await endpoint({ 
+        tone: selectedTone, 
+        accountId: selectedAccount?.id,
+        type: selectedContentType,
+        context: context
+      });
+      
+      setGeneratedEmail(parseAnyResponse(res));
     } catch (err) {
       console.error("Content generation failed:", err);
       setGeneratedEmail("Network error. Please try again.");
@@ -102,9 +137,23 @@ export function ComprehensiveAIWorkspace() {
   };
 
   const loadStrategy = async () => {
+    if (isUploadMode) {
+      // Mock strategy for upload mode
+      setStrategyData({
+        recommendation: "Focus on closing the technical gap by providing detailed case studies.",
+        winProbability: selectedAccount?.deals?.[0]?.probability || 65,
+        healthGrade: 'A-',
+        priorities: [
+          { title: "Schedule Demo", desc: "Showcase enterprise features", badge: "🔴 Critical", color: "red-500" },
+          { title: "Review Pricing", desc: "Align with budget expectations", badge: "🟡 High", color: "warning" }
+        ],
+        checklist: ['Verify stakeholder list', 'Send proposal draft']
+      });
+      return;
+    }
     setLoadingStrategy(true);
     try {
-      const res = await fetchStrategy({}, selectedAccountId);
+      const res = await postStrategy({ accountId: selectedAccount?.id });
       if (res) setStrategyData(res);
     } catch (err) {
       console.error("Strategy fetch failed:", err);
@@ -113,13 +162,42 @@ export function ComprehensiveAIWorkspace() {
   };
 
   const { buyingSignals, accountTimeline, dealHealthData, scoreFactors, dealScores } = useMemo(() => {
+    if (isUploadMode && globalData) {
+      const activeDeals = selectedAccount ? selectedAccount.deals : globalData.deals;
+      const bSignals = (selectedAccount?.buyingSignals || globalData.deals.flatMap(d => d.signals)).map((s: string, i: number) => ({
+        id: i,
+        signal: s,
+        severity: s.includes('Technical') ? 'High' : 'Medium',
+        confidence: 85,
+        time: 'Recent'
+      }));
+
+      return {
+        buyingSignals: bSignals,
+        accountTimeline: globalData.activities.filter(a => !selectedAccount || a.accountName === selectedAccount.name),
+        dealHealthData: activeDeals.slice(0, 5).map(d => ({ name: d.name, score: d.probability })),
+        scoreFactors: [
+          { factor: 'Pipeline Health', weight: 40, value: 85 },
+          { factor: 'Activity', weight: 30, value: 70 },
+          { factor: 'Signals', weight: 30, value: 90 }
+        ],
+        dealScores: activeDeals.slice(0, 5).map((d: any) => ({
+          deal: d.name,
+          health: d.probability,
+          winProb: d.probability,
+          risk: d.probability >= 70 ? 'Low' : 'Medium',
+          stage: d.stage
+        }))
+      };
+    }
+
     if (!data) return { buyingSignals: [], accountTimeline: [], dealHealthData: [], scoreFactors: [], dealScores: [] };
 
     const opps = normalizeOpportunities(data);
     const acts = normalizeActivities(data);
 
-    const bSignals = Array.isArray(data.buyingSignals) && data.buyingSignals.length > 0 
-      ? data.buyingSignals.map((s: any, i: number) => ({
+    const bSignals = Array.isArray((data as any).buyingSignals) && (data as any).buyingSignals.length > 0 
+      ? (data as any).buyingSignals.map((s: any, i: number) => ({
           id: i,
           signal: s.keyword || s.signalType,
           detail: s.quoteContext || s.detail,
@@ -375,7 +453,7 @@ export function ComprehensiveAIWorkspace() {
                   </tr>
                 </thead>
                 <tbody>
-                  {dealScores.map((deal, idx) => (
+                  {dealScores.map((deal: any, idx: number) => (
                     <tr key={idx} className="border-b border-white/5 hover:bg-white/[0.02]">
                       <td className="py-2 px-3 text-[#b3b3b3] font-medium">{deal.deal}</td>
                       <td className="py-2 px-3">
@@ -469,12 +547,7 @@ export function ComprehensiveAIWorkspace() {
                     <Loader2 className="w-6 h-6 animate-spin text-primary" />
                   </div>
                 ) : (
-                  <>
-                    <p className="text-sm text-white font-medium">Generated Content</p>
-                    <p className="text-sm text-[#b3b3b3] whitespace-pre-wrap">
-                      {generatedEmail || "Click an option above to generate AI content based on your latest discussions and deal CRM stage."}
-                    </p>
-                  </>
+                  <RenderedContent data={generatedEmail} fallback="Click an option above to generate AI content based on your latest discussions and deal CRM stage." />
                 )}
               </div>
 

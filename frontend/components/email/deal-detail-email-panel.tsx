@@ -3,7 +3,7 @@ import { Clock, Mail, Send, Zap, MessageSquare, FileText, Loader2, RotateCw, Cop
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { fetchEmail, fetchCompleteData } from '@/lib/api';
+import { fetchEmail, fetchCompleteData, parseResponse } from '@/lib/api';
 import { useAccount } from '@/context/account-context';
 import { GeneratedContentModal } from './generated-content-modal';
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard';
@@ -94,7 +94,7 @@ export function DealDetailEmailPanel() {
           Account history summary: ${selectedAccount?.Industry || 'enterprise'} sector.
           Focus on addressing their most recent needs and pushing for the next meeting.`
       }, selectedAccountId);
-      const content = data?.email?.body || data?.content || (typeof data === 'string' ? data : JSON.stringify(data));
+      const content = parseResponse(data);
       setEmailDraft({ subject: data?.email?.subject || 'Suggested Response', content: content });
     } catch (err) {
       console.error('Failed to generate draft', err);

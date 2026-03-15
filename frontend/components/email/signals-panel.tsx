@@ -4,7 +4,7 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useAccount } from '@/context/account-context';
-import { fetchEmail, fetchProposal, fetchStrategy, fetchMeetingPrep } from '@/lib/api';
+import { fetchEmail, fetchProposal, fetchStrategy, fetchMeetingPrep, parseResponse } from '@/lib/api';
 import { GeneratedContentModal } from './generated-content-modal';
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard';
 
@@ -156,7 +156,7 @@ export function SignalsPanel() {
         }
       }
 
-      const content = res?.email?.body || res?.content || res?.summary || res?.result || (typeof res === 'string' ? res : JSON.stringify(res));
+      const content = parseResponse(res);
       setModalContent(content);
     } catch (err) {
       setModalContent('Failed to generate response. Please try again.');

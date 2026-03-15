@@ -2,8 +2,9 @@
 
 import { useState, useEffect } from 'react';
 import { Copy, RotateCw, WandIcon, Download, Save, Loader2 } from 'lucide-react';
-import { fetchAccountBrief, fetchStrategy, fetchEmail, fetchMeetingPrep, fetchProposal } from '@/lib/api';
+import { fetchAccountBrief, postStrategy, postEmail, postMeetingPrep, postProposal, parseResponse } from '@/lib/api';
 import { useAccount } from '@/context/account-context';
+import { useDataSource } from '@/context/DataSourceContext';
 import { GeneratedContentModal } from './generated-content-modal';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -89,8 +90,8 @@ const CONTENT_LABELS: Record<string, { title: string; subtitle: (name: string) =
 };
 
 export function AIWorkspacePanel() {
-  const { accounts, selectedAccountId } = useAccount();
-  const selectedAccount = accounts.find(a => a.Id === selectedAccountId);
+  const { isUploadMode, globalData, selectedAccount, switchToSalesforce } = useDataSource();
+  const selectedAccountId = selectedAccount?.id;
   const { copied, copy } = useCopyToClipboard();
   const [activeTab, setActiveTab] = useState('intel');
   
@@ -106,18 +107,31 @@ export function AIWorkspacePanel() {
   const [loadingEmail, setLoadingEmail] = useState(false);
 
   useEffect(() => {
-    if (!selectedAccountId) return;
+    if (!selectedAccountId || isUploadMode) {
+      if (isUploadMode && globalData && selectedAccount) {
+        setIntelData({
+          lastInteractionDate: selectedAccount.lastActivity,
+          emailCount: 5,
+          daysSinceLastTouch: 1,
+          engagementLevel: selectedAccount.engagementLevel.toLowerCase(),
+          buyingSignals: selectedAccount.buyingSignals,
+          keyPoints: ['Interest in Enterprise', 'Budget discussions']
+        });
+        setLoadingIntel(false);
+      }
+      return;
+    }
     setLoadingIntel(true);
     fetchAccountBrief(selectedAccountId).then(d => {
       if (d) setIntelData(d);
       setLoadingIntel(false);
     });
-  }, [selectedAccountId]);
+  }, [selectedAccountId, isUploadMode, globalData, selectedAccount]);
 
   useEffect(() => {
     if (activeTab === 'strategy' && !strategyData && selectedAccountId) {
       setLoadingStrategy(true);
-      fetchStrategy({}, selectedAccountId).then(d => {
+      postStrategy({ accountId: selectedAccountId }).then((d: any) => {
         if (d) setStrategyData(d);
         setLoadingStrategy(false);
       });
@@ -130,33 +144,37 @@ export function AIWorkspacePanel() {
     let res;
     
     try {
-      const baseContext = `Generate a ${tone} ${emailType.replace('-', ' ')} for ${selectedAccount?.Name || 'the account'}. 
-        Industry: ${selectedAccount?.Industry || 'enterprise'}.
+      const baseContext = `Generate a ${tone} ${emailType.replace('-', ' ')} for ${selectedAccount?.name || 'the account'}. 
+        Industry: ${selectedAccount?.industry || 'enterprise'}.
         Tone: ${tone}.
         Buying signals: ${intelData?.buyingSignals?.join(', ') || 'recent engagement'}.
         Make it personal, specific, and include a clear call to action.`;
 
       if (emailType === 'proposal') {
-        res = await fetchProposal({ 
+        res = await postProposal({ 
           tone,
-          context: `Generate a comprehensive sales proposal for ${selectedAccount?.Name}. Include executive summary, pain points, proposed solution, and ROI. ${baseContext}`
-        }, selectedAccountId);
+          accountId: selectedAccountId,
+          context: `Generate a comprehensive sales proposal for ${selectedAccount?.name}. Include executive summary, pain points, proposed solution, and ROI. ${baseContext}`
+        });
       } else if (emailType === 'meeting-recap') {
-        res = await fetchMeetingPrep({
+        res = await postMeetingPrep({
           tone,
-          context: `Generate a professional meeting summary document for ${selectedAccount?.Name}. Include decisions made and action items. ${baseContext}`
-        }, selectedAccountId);
+          accountId: selectedAccountId,
+          context: `Generate a professional meeting summary document for ${selectedAccount?.name}. Include decisions made and action items. ${baseContext}`
+        });
       } else {
-        res = await fetchEmail({ 
+        res = await postEmail({ 
           tone, 
           type: emailType,
+          accountId: selectedAccountId,
           context: baseContext
-        }, selectedAccountId);
+        });
       }
 
-      const content = res?.email?.body || res?.content || res?.summary || res?.notes || (typeof res === 'string' ? res : JSON.stringify(res));
+      const content = parseResponse(res);
+      const resObj = res as any;
       setEmailData({ 
-        subject: res?.email?.subject || CONTENT_LABELS[emailType]?.title || 'Generated Content', 
+        subject: resObj?.email?.subject || resObj?.subject || CONTENT_LABELS[emailType]?.title || 'Generated Content', 
         content: content, 
         type: emailType, 
         tone 
@@ -330,7 +348,7 @@ export function AIWorkspacePanel() {
               {CONTENT_LABELS[emailType]?.title || 'Generated Content'}
             </label>
             <p className="text-xs text-[#888] -mt-2">
-              {CONTENT_LABELS[emailType]?.subtitle(selectedAccount?.Name || 'Account') || 'AI generated content'}
+              {CONTENT_LABELS[emailType]?.subtitle(selectedAccount?.name || 'Account') || 'AI generated content'}
             </p>
             <input
               type="text"

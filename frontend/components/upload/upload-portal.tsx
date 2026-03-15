@@ -1,127 +1,58 @@
 'use client';
 
 import { useState } from 'react';
-import { Upload, FileText, CheckCircle, AlertCircle, Copy, Trash2, Sparkles, Database } from 'lucide-react';
-import { parseUploadedFile } from '@/utils/parse-uploaded-file';
-import { summarizeUploadedData, buildAnalysisPrompt } from '@/utils/summarize-uploaded-data';
-import { parseApiResponse } from '@/utils/parse-api-response';
-import { useAccount } from '@/context/account-context';
-
-interface UploadedFile {
-  id: string;
-  name: string;
-  size: string;
-  status: 'parsing' | 'analyzing' | 'complete' | 'error';
-  progress: number;
-  error?: string;
-}
-
-interface AnalysisResult {
-  fileName: string;
-  summary: any;
-  aiInsights: string;
-  analyzedAt: string;
-}
+import { Upload, FileText, CheckCircle, AlertCircle, Trash2, Database, Sparkles } from 'lucide-react';
+import { useDataSource, GlobalData } from '@/context/DataSourceContext';
+import { normalizeToGlobalData, parseFileToRows } from '@/lib/parseAndNormalize';
 
 export function UploadPortal() {
-  const { selectedAccountId } = useAccount();
-  const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
-  const [analysisResults, setAnalysisResults] = useState<Record<string, AnalysisResult>>({});
-  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const { switchToUpload } = useDataSource();
+  const [uploadState, setUploadState] = useState<{
+    status: 'idle' | 'parsing' | 'analyzing' | 'ready' | 'error';
+    progress: number;
+    fileName: string;
+    preview: GlobalData | null;
+    error: string;
+  }>({ status: 'idle', progress: 0, fileName: '', preview: null, error: '' });
 
-  const updateFileStatus = (id: string, updates: Partial<UploadedFile>) => {
-    setUploadedFiles(prev => prev.map(f => f.id === id ? { ...f, ...updates } : f));
-  };
+  const handleFileUpload = async (files: FileList | File[]) => {
+    const file = Array.from(files)[0];
+    if (!file) return;
 
-  const handleFileUpload = async (files: FileList | null) => {
-    if (!files) return;
-    const fileArray = Array.from(files);
+    setUploadState({ status: 'parsing', progress: 10, fileName: file.name, preview: null, error: '' });
 
-    for (const file of fileArray) {
-      const fileId = `${file.name}-${Date.now()}`;
+    try {
+      // Step 1: Parse file to rows
+      setUploadState(p => ({ ...p, progress: 30 }));
+      const rows = await parseFileToRows(file);
       
-      setUploadedFiles(prev => [...prev, {
-        id: fileId,
-        name: file.name,
-        size: `${(file.size / (1024 * 1024)).toFixed(1)} MB`,
-        status: 'parsing',
-        progress: 10
-      }]);
+      setUploadState(p => ({ ...p, status: 'analyzing', progress: 60 }));
 
-      try {
-        // Step 1: Parse file
-        updateFileStatus(fileId, { progress: 30 });
-        const parsedData = await parseUploadedFile(file);
-        
-        // Step 2: Summarize
-        updateFileStatus(fileId, { status: 'analyzing', progress: 50 });
-        const summary = summarizeUploadedData(parsedData);
-        
-        // Step 3: AI Analysis via fetchStrategy endpoint
-        const analysisPrompt = buildAnalysisPrompt(file.name, summary);
-        
-        const res = await fetch('http://localhost:3001/api/strategy', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            accountId: selectedAccountId || 'remote_upload',
-            context: analysisPrompt
-          })
-        });
+      // Step 2: Normalize data
+      const normalized = normalizeToGlobalData(rows, file.name);
+      setUploadState(p => ({ ...p, progress: 90 }));
 
-        if (!res.ok) throw new Error(`API error: ${res.status}`);
-        
-        const data = await res.json();
-        console.log(`Upload analysis raw response for ${file.name}:`, JSON.stringify(data, null, 2));
-        const aiInsights = parseApiResponse(data);
+      // Step 3: Ready — show preview
+      setUploadState(p => ({
+        ...p, status: 'ready', progress: 100, preview: normalized
+      }));
 
-        setAnalysisResults(prev => ({
-          ...prev,
-          [fileId]: {
-            fileName: file.name,
-            summary,
-            aiInsights,
-            analyzedAt: new Date().toISOString()
-          }
-        }));
-
-        updateFileStatus(fileId, { status: 'complete', progress: 100 });
-      } catch (err: any) {
-        console.error(`Upload/Analysis error for ${file.name}:`, err);
-        updateFileStatus(fileId, { status: 'error', progress: 100, error: err.message });
-      }
+    } catch (err: unknown) {
+      setUploadState(p => ({
+        ...p, status: 'error',
+        error: err instanceof Error ? err.message : 'Failed to parse file'
+      }));
     }
   };
 
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    handleFileUpload(e.dataTransfer.files);
+  const handleActivateData = () => {
+    if (!uploadState.preview) return;
+    switchToUpload(uploadState.preview);
   };
 
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
+  const resetUpload = () => {
+    setUploadState({ status: 'idle', progress: 0, fileName: '', preview: null, error: '' });
   };
-
-  const handleCopy = (id: string, text: string) => {
-    navigator.clipboard.writeText(text);
-    setCopiedId(id);
-    setTimeout(() => setCopiedId(null), 2000);
-  };
-
-  const removeFile = (id: string) => {
-    setUploadedFiles(prev => prev.filter(f => f.id !== id));
-    setAnalysisResults(prev => {
-      const next = { ...prev };
-      delete next[id];
-      return next;
-    });
-  };
-
-  const formatCurrency = (val: number) => 
-    val >= 1000000 ? `$${(val / 1000000).toFixed(1)}M` : 
-    val >= 1000 ? `$${(val / 1000).toFixed(0)}K` : `$${val.toFixed(0)}`;
 
   return (
     <div className="glass luxury-panel rounded-xl p-6 border-glow-accent h-full flex flex-col">
@@ -133,160 +64,146 @@ export function UploadPortal() {
         <p className="text-xs text-muted-foreground">Import sales data for instant AI analysis and enrichment</p>
       </div>
 
-      {/* Drop Zone */}
-      <div
-        onDragOver={handleDragOver}
-        onDrop={handleDrop}
-        onClick={() => {
+      {uploadState.status === 'idle' || uploadState.status === 'error' ? (
+        <div
+          onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
+          onDrop={(e) => { e.preventDefault(); e.stopPropagation(); handleFileUpload(e.dataTransfer.files); }}
+          onClick={() => {
             const input = document.createElement('input');
             input.type = 'file';
-            input.multiple = true;
-            input.onchange = (e) => handleFileUpload((e.target as HTMLInputElement).files);
+            input.onchange = (e) => handleFileUpload((e.target as HTMLInputElement).files || []);
             input.click();
-        }}
-        className="mb-8 p-10 rounded-xl border-2 border-dashed border-accent/20 bg-white/2 hover:bg-white/5 hover:border-accent/40 transition-all duration-300 cursor-pointer group text-center"
-      >
-        <div className="flex flex-col items-center gap-4">
-          <div className="p-4 rounded-full bg-accent/10 group-hover:bg-accent/20 transition-all scale-110">
-            <Upload className="w-8 h-8 text-accent group-hover:text-accent-light" />
-          </div>
-          <div>
-            <p className="text-sm font-semibold text-foreground group-hover:text-accent transition-colors">Select files or drag & drop</p>
-            <p className="text-xs text-muted-foreground mt-1">Supports CSV, Excel (.xlsx, .xls), and JSON</p>
+          }}
+          className="mb-8 p-10 rounded-xl border-2 border-dashed border-accent/20 bg-white/2 hover:bg-white/5 hover:border-accent/40 transition-all duration-300 cursor-pointer group text-center"
+        >
+          <div className="flex flex-col items-center gap-4">
+            <div className="p-4 rounded-full bg-accent/10 group-hover:bg-accent/20 transition-all scale-110">
+              <Upload className="w-8 h-8 text-accent group-hover:text-accent-light" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-foreground group-hover:text-accent transition-colors">Select file or drag & drop</p>
+              <p className="text-xs text-muted-foreground mt-1">Supports CSV, Excel (.xlsx, .xls), and JSON</p>
+            </div>
           </div>
         </div>
-      </div>
-
-      {/* Upload List & Results */}
-      <div className="flex-1 space-y-4 overflow-y-auto pr-2 custom-scrollbar">
-        {uploadedFiles.length === 0 && (
-          <div className="flex flex-col items-center justify-center py-12 text-center">
-            <Database className="w-12 h-12 text-white/5 mb-4" />
-            <p className="text-sm text-muted-foreground">No files uploaded yet</p>
-          </div>
-        )}
-
-        {uploadedFiles.map((file) => (
-          <div key={file.id} className="space-y-3">
-            {/* File Info Card */}
-            <div className={`p-4 rounded-lg bg-white/5 border border-white/10 hover:border-accent/30 transition-all duration-300 group`}>
-              <div className="flex items-start justify-between gap-3 mb-3">
-                <div className="flex items-start gap-4 flex-1">
-                  <div className={`p-2 rounded-lg ${file.status === 'error' ? 'bg-destructive/10' : 'bg-primary/10'}`}>
-                    <FileText className={`w-5 h-5 ${file.status === 'error' ? 'text-destructive' : 'text-primary'}`} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-bold text-foreground truncate">{file.name}</p>
-                    <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">{file.size}</p>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-3">
-                  {file.status === 'complete' && <CheckCircle className="w-5 h-5 text-success" />}
-                  {file.status === 'error' && <AlertCircle className="w-5 h-5 text-destructive" />}
-                  {(file.status === 'parsing' || file.status === 'analyzing') && (
-                    <div className="w-4 h-4 rounded-full border-2 border-accent/30 border-t-accent animate-spin" />
-                  )}
-                  <button 
-                    onClick={() => removeFile(file.id)}
-                    className="p-1.5 rounded-md hover:bg-white/10 text-muted-foreground hover:text-destructive transition-all"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-
-              {/* Progress Bar */}
-              <div className="space-y-2">
-                <div className="w-full h-1.5 bg-white/10 rounded-full overflow-hidden">
-                  <div
-                    className={`h-full transition-all duration-700 ease-out ${
-                      file.status === 'complete' ? 'bg-success' : 
-                      file.status === 'error' ? 'bg-destructive' : 'bg-accent shadow-[0_0_10px_rgba(99,102,241,0.5)]'
-                    }`}
-                    style={{ width: `${file.progress}%` }}
-                  />
-                </div>
-                <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider">
-                  <span className={file.status === 'error' ? 'text-destructive' : 'text-muted-foreground'}>
-                    {file.status === 'parsing' && '⟳ Parsing file structure...'}
-                    {file.status === 'analyzing' && '✦ Generating AI insights...'}
-                    {file.status === 'complete' && '✓ Analysis complete'}
-                    {file.status === 'error' && `✗ ${file.error || 'Failed'}`}
-                  </span>
-                  <span className="text-foreground">{file.progress}%</span>
-                </div>
+      ) : (
+        <div className="mb-8 p-6 rounded-lg bg-white/5 border border-white/10">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-3">
+              <FileText className="w-5 h-5 text-primary" />
+              <div>
+                <p className="text-sm font-bold text-white">{uploadState.fileName}</p>
+                <p className="text-[10px] text-muted-foreground uppercase tracking-widest">
+                  {uploadState.status === 'parsing' && '⟳ Parsing structure...'}
+                  {uploadState.status === 'analyzing' && '✦ Normalizing data...'}
+                  {uploadState.status === 'ready' && '✓ Ready to activate'}
+                </p>
               </div>
             </div>
+            <button onClick={resetUpload} className="p-1.5 rounded-md hover:bg-white/10 text-muted-foreground hover:text-destructive">
+              <Trash2 className="w-4 h-4" />
+            </button>
+          </div>
+          <div className="w-full h-1.5 bg-white/10 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-accent transition-all duration-500"
+              style={{ width: `${uploadState.progress}%` }}
+            />
+          </div>
+        </div>
+      )}
 
-            {/* AI Results Panel */}
-            {file.status === 'complete' && analysisResults[file.id] && (
-              <div className="animate-fade-up-soft p-5 rounded-xl bg-[#0f172a] border border-accent/20 ml-2 shadow-2xl">
-                {/* Statistics Grid */}
-                {analysisResults[file.id].summary && (
-                  <div className="grid grid-cols-4 gap-3 mb-6">
-                    {[
-                      { label: 'Pipeline Val', value: formatCurrency(analysisResults[file.id].summary.statistics.totalPipelineValue) },
-                      { label: 'Deals Count', value: analysisResults[file.id].summary.statistics.totalDeals },
-                      { label: 'Accounts', value: analysisResults[file.id].summary.statistics.uniqueAccounts },
-                      { label: 'Avg Deal', value: formatCurrency(analysisResults[file.id].summary.statistics.averageDealValue) },
-                    ].map((stat, i) => (
-                      <div key={i} className="bg-white/3 border border-white/5 rounded-lg p-3 text-center">
-                        <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-bold mb-1">{stat.label}</p>
-                        <p className="text-base font-bold text-accent">{stat.value}</p>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {/* AI Insights Content */}
-                <div className="relative">
-                  <div className="flex items-center gap-2 mb-3">
-                    <Sparkles className="w-4 h-4 text-accent" />
-                    <span className="text-[11px] font-bold text-accent uppercase tracking-widest">Pipeline Health & AI Insights</span>
-                  </div>
-                  <div className="p-4 rounded-lg bg-white/2 border border-white/5 relative group">
-                    <p className="text-xs text-[#d1d5db] leading-relaxed whitespace-pre-wrap">
-                      {analysisResults[file.id].aiInsights}
-                    </p>
-                  </div>
-
-                  <div className="flex items-center gap-2 mt-4">
-                    <button
-                      onClick={() => handleCopy(file.id, analysisResults[file.id].aiInsights)}
-                      className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-accent/10 border border-accent/20 hover:bg-accent/20 text-accent transition-all text-xs font-bold uppercase tracking-tight"
-                    >
-                      <Copy className="w-3 h-3" />
-                      {copiedId === file.id ? 'Copied' : 'Copy Insights'}
-                    </button>
-                    <span className="text-[10px] text-muted-foreground ml-auto italic">
-                      Analyzed at {new Date(analysisResults[file.id].analyzedAt).toLocaleTimeString()}
-                    </span>
-                  </div>
-                </div>
+      {uploadState.status === 'ready' && uploadState.preview && (
+        <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar animate-fade-up">
+          {/* Summary Stats Grid */}
+          <div className="grid grid-cols-5 gap-3 mb-6">
+            {[
+              { label: 'Total Deals', value: uploadState.preview.summary.activeDeals },
+              { label: 'Pipeline Value', value: `$${(uploadState.preview.summary.totalPipelineValue / 1000).toFixed(0)}K` },
+              { label: 'Accounts', value: uploadState.preview.summary.totalAccounts },
+              { label: 'Avg Deal Size', value: `$${(uploadState.preview.summary.avgDealSize / 1000).toFixed(0)}K` },
+              { label: 'Win Rate', value: `${uploadState.preview.summary.winRate}%` },
+            ].map(stat => (
+              <div key={stat.label} className="bg-[#0f172a] rounded-xl p-4 border border-[#1e3a5f] text-center">
+                <p className="text-[#6b7280] text-[10px] uppercase font-bold tracking-widest mb-2">{stat.label}</p>
+                <p className="text-accent text-xl font-bold">{stat.value}</p>
               </div>
-            )}
+            ))}
           </div>
-        ))}
-      </div>
 
-      {/* Summary Footer */}
-      {uploadedFiles.length > 0 && (
-        <div className="mt-6 pt-5 border-t border-white/10 grid grid-cols-3 gap-6 animate-fade-up">
-          <div className="text-center">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Total</p>
-            <p className="text-xl font-black text-foreground">{uploadedFiles.length}</p>
+          {/* Deals Preview Table */}
+          <div className="bg-[#0f172a] rounded-xl border border-[#1e3a5f] mb-6 overflow-hidden">
+            <div className="p-4 border-b border-[#1e3a5f] flex items-center justify-between">
+              <div>
+                <p className="text-white text-sm font-semibold flex items-center gap-2">
+                  <Database className="w-4 h-4 text-accent" />
+                  {uploadState.preview.deals.length} Deals Detected
+                </p>
+                <p className="text-[#6b7280] text-[10px] mt-1">Found in {uploadState.preview.rawFileName}</p>
+              </div>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left">
+                <thead className="bg-[#1e293b]">
+                  <tr>
+                    {['Deal Name', 'Account', 'Value', 'Stage', 'Prob', 'Days', 'Contact'].map(h => (
+                      <th key={h} className="text-[#6b7280] text-[10px] uppercase font-bold tracking-widest p-3 border-b border-[#1e3a5f]">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#1a2744]">
+                  {uploadState.preview.deals.slice(0, 10).map((deal, i) => {
+                    const probColor = deal.probability >= 75 ? 'text-success'
+                      : deal.probability >= 50 ? 'text-warning'
+                      : 'text-destructive';
+                    return (
+                      <tr key={i} className="hover:bg-white/2 transition-colors">
+                        <td className="p-3 text-white text-xs whitespace-nowrap">{deal.name}</td>
+                        <td className="p-3 text-[#d1d5db] text-xs whitespace-nowrap">{deal.accountName}</td>
+                        <td className="p-3 text-accent text-xs font-bold">
+                          ${deal.value >= 1000 ? `${(deal.value / 1000).toFixed(0)}K` : deal.value}
+                        </td>
+                        <td className="p-3">
+                          <span className="bg-[#1e293b] text-accent-light px-2 py-0.5 rounded text-[10px] font-bold border border-accent/30">
+                            {deal.stage}
+                          </span>
+                        </td>
+                        <td className={`p-3 text-xs font-bold ${probColor}`}>{deal.probability}%</td>
+                        <td className={`p-3 text-xs ${deal.daysLeft <= 7 ? 'text-destructive font-bold' : 'text-[#d1d5db]'}`}>{deal.daysLeft}d</td>
+                        <td className="p-3 text-[#d1d5db] text-xs whitespace-nowrap">{deal.contact}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+              {uploadState.preview.deals.length > 10 && (
+                <div className="p-3 bg-[#1e293b]/30 text-center">
+                  <p className="text-[#6b7280] text-[10px] font-medium">
+                    + {uploadState.preview.deals.length - 10} more deals in this file
+                  </p>
+                </div>
+              )}
+            </div>
           </div>
-          <div className="text-center">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Success</p>
-            <p className="text-xl font-black text-success">{uploadedFiles.filter(f => f.status === 'complete').length}</p>
-          </div>
-          <div className="text-center border-l border-white/5 pl-4">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Pipeline Sum</p>
-            <p className="text-xl font-black text-accent-light">
-              {formatCurrency(Object.values(analysisResults).reduce((sum, res) => sum + (res.summary?.statistics?.totalPipelineValue || 0), 0))}
-            </p>
-          </div>
+
+          {/* Activate Button */}
+          <button
+            onClick={handleActivateData}
+            className="w-full bg-gradient-to-r from-accent to-accent-light text-white rounded-xl py-4 text-base font-bold shadow-lg shadow-accent/20 hover:scale-[1.01] active:scale-[0.99] transition-all flex items-center justify-center gap-3"
+          >
+            <Sparkles className="w-5 h-5" />
+            Activate — Use This Data Across All Pages
+          </button>
+          <p className="text-[#6b7280] text-[10px] text-center mt-3 font-medium">
+            This will switch the entire command center to use this file data instead of live Salesforce
+          </p>
+        </div>
+      )}
+
+      {uploadState.status === 'error' && (
+        <div className="mt-4 p-4 rounded-lg bg-destructive/10 border border-destructive/30 flex items-start gap-3">
+          <AlertCircle className="w-5 h-5 text-destructive flex-shrink-0" />
+          <p className="text-destructive text-xs font-medium">{uploadState.error}</p>
         </div>
       )}
     </div>

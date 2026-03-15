@@ -12,22 +12,16 @@ import { useAccount } from '@/context/account-context';
 
 const COLORS = ['#8fb39a', '#7ea38a', '#b39a6b', '#d97706'];
 
+import { usePageData } from '@/hooks/usePageData';
+
 export function AnalyticsPage() {
-  const { selectedAccountId } = useAccount();
+  const { data, loading } = usePageData(
+    '/completeData',
+    (ctx) => ctx.globalData
+  );
+
   const [activeTab, setActiveTab] = useState('overview');
   const [selectedPeriod, setSelectedPeriod] = useState('30d');
-  
-  const [data, setData] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    if (!selectedAccountId) return;
-    setLoading(true);
-    fetchCompleteData(selectedAccountId).then((res) => {
-      setData(res || {});
-      setLoading(false);
-    });
-  }, [selectedAccountId]);
 
   const {
     pipelineData,
@@ -195,26 +189,42 @@ export function AnalyticsPage() {
             {/* Deal Health Distribution */}
             <Card className="glass luxury-panel border-[#2a2a2a] p-6 rounded-lg">
               <h3 className="text-sm font-semibold text-white mb-4">Deal Health Distribution</h3>
-              <div className="h-80">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={healthDistribution}
-                      cx="50%"
-                      cy="50%"
-                      labelLine={false}
-                      label={({ name, value }) => `${name}: ${value}`}
-                      outerRadius={100}
-                      fill="#8884d8"
-                      dataKey="value"
-                    >
-                      {healthDistribution.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.color} />
-                      ))}
-                    </Pie>
-                    <Tooltip contentStyle={{ backgroundColor: '#1a1a1a', border: '1px solid #2a2a2a', borderRadius: '8px' }} />
-                  </PieChart>
-                </ResponsiveContainer>
+              <div className="h-80 flex items-center justify-center">
+                {healthDistribution.length === 1 && healthDistribution[0].value > 0 ? (
+                  <div className="text-center p-6 bg-white/[0.02] border border-white/10 rounded-xl w-full">
+                    <p className="text-sm text-[#888] uppercase tracking-wider mb-2">{healthDistribution[0].name}</p>
+                    <p className="text-5xl font-bold text-primary mb-2">{healthDistribution[0].value}</p>
+                    <p className="text-xs text-[#666]">Deals in this health range</p>
+                  </div>
+                ) : healthDistribution.length > 0 ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={healthDistribution}
+                        cx="50%"
+                        cy="45%"
+                        labelLine={false}
+                        outerRadius={80}
+                        innerRadius={60}
+                        paddingAngle={5}
+                        fill="#8884d8"
+                        dataKey="value"
+                      >
+                        {healthDistribution.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.color} />
+                        ))}
+                      </Pie>
+                      <Tooltip contentStyle={{ backgroundColor: '#1a1a1a', border: '1px solid #2a2a2a', borderRadius: '8px' }} />
+                      <Legend 
+                        verticalAlign="bottom" 
+                        height={36}
+                        formatter={(value) => <span className="text-xs text-[#888]">{value}</span>}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="text-center text-[#666] text-sm">No health data available</div>
+                )}
               </div>
             </Card>
           </div>

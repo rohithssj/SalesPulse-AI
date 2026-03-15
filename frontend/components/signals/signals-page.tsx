@@ -37,30 +37,27 @@ const getConfidenceColor = (confidence: number) => {
   return 'text-red-500';
 };
 
+import { usePageData } from '@/hooks/usePageData';
+
 export function SignalsPage() {
+  const { data, loading } = usePageData(
+    '/completeData',
+    (ctx) => ctx.globalData
+  );
+
   const [activeTab, setActiveTab] = useState('all');
   const [selectedType, setSelectedType] = useState('All');
   const [selectedSeverity, setSelectedSeverity] = useState('All');
   const [selectedConfidence, setSelectedConfidence] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
 
-  const [data, setData] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    fetchCompleteData().then((res) => {
-      setData(res || {});
-      setLoading(false);
-    });
-  }, []);
-
   const { signals, timeline } = useMemo(() => {
     if (!data) return { signals: [], timeline: [] };
     const acts = normalizeActivities(data);
     
     // Use API signals if present, otherwise extract from activities
-    let resolvedSignals = Array.isArray(data.signals) && data.signals.length > 0 
-      ? data.signals 
+    let resolvedSignals = (data as any).signals && Array.isArray((data as any).signals) && (data as any).signals.length > 0 
+      ? (data as any).signals 
       : extractSignalsFromActivities(acts);
     
     // Provide some default dummy timeline if not present

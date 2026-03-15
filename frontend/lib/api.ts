@@ -1,18 +1,43 @@
 export const API_URL = (process.env.REACT_APP_SF_PROXY_URL || 'http://localhost:3001') + '/api';
 
-export async function apiFetch(endpoint: string, options?: RequestInit) {
+export async function apiFetch<T>(
+  endpoint: string, 
+  options?: {
+    method?: 'GET' | 'POST';
+    body?: any;
+    params?: Record<string, string>;
+    headers?: Record<string, string>;
+  }
+): Promise<T | null> {
   try {
-    const res = await fetch(`${API_URL}${endpoint}`, {
-      ...options,
+    let url = `${API_URL}${endpoint}`;
+    
+    // Handle query params for GET
+    if (options?.params && (!options.method || options.method === 'GET')) {
+      const qs = new URLSearchParams(options.params).toString();
+      url = `${url}${url.includes('?') ? '&' : '?'}${qs}`;
+    }
+
+    const fetchOptions: RequestInit = {
+      method: options?.method || 'GET',
       headers: {
         'Content-Type': 'application/json',
         ...options?.headers,
       },
-    });
+    };
+
+    if (options?.method === 'POST' && options.body) {
+      fetchOptions.body = JSON.stringify(options.body);
+    }
+
+    const res = await fetch(url, fetchOptions);
+    
     if (!res.ok) {
-      console.error(`API Error on ${endpoint}:`, res.statusText);
+      const errorText = await res.text();
+      console.error(`API Error on ${endpoint}: ${res.status} ${res.statusText}`, errorText);
       return null;
     }
+    
     return await res.json();
   } catch (err) {
     console.error(`Network Error on ${endpoint}:`, err);
@@ -20,13 +45,123 @@ export async function apiFetch(endpoint: string, options?: RequestInit) {
   }
 }
 
-export const fetchCompleteData = (accountId?: string) => apiFetch(`/completeData${accountId ? `?accountId=${accountId}` : ''}`);
-export const fetchAccounts = () => apiFetch('/accounts');
-export const fetchStrategy = (params?: any, accountId?: string) => apiFetch(`/strategy${accountId ? `?accountId=${accountId}` : ''}`, { method: 'POST', body: JSON.stringify(params || {}) });
-export const fetchEmail = (params?: any, accountId?: string) => apiFetch(`/email${accountId ? `?accountId=${accountId}` : ''}`, { method: 'POST', body: JSON.stringify(params || {}) });
-export const fetchProposal = (params?: any, accountId?: string) => apiFetch(`/proposal${accountId ? `?accountId=${accountId}` : ''}`, { method: 'POST', body: JSON.stringify(params || {}) });
-export const fetchMeetingPrep = (params?: any, accountId?: string) => apiFetch(`/meetingPrep${accountId ? `?accountId=${accountId}` : ''}`, { method: 'POST', body: JSON.stringify(params || {}) });
-export const fetchAccountBrief = (accountId?: string) => apiFetch(`/accountBrief${accountId ? `?accountId=${accountId}` : ''}`);
+/**
+ * Universal response parser to handle various Salesforce Apex response shapes
+ */
+export function parseAIResponse(data: any): string {
+  if (data === null || data === undefined) {
+    return 'No response received. Please check your Salesforce connection and try again.';
+  }
+
+  if (typeof data === 'string') {
+    const trimmed = data.trim();
+    if (trimmed === '' || trimmed === 'null' || trimmed === 'undefined') {
+      return 'AI returned an empty response. Please try again.';
+    }
+    return trimmed;
+  }
+
+  if (typeof data === 'object' && !Array.isArray(data)) {
+    const obj = data as Record<string, any>;
+
+    // Anthropic content array format
+    if (Array.isArray(obj.content)) {
+      const text = (obj.content as any[])
+        .filter(b => b.type === 'text')
+        .map(b => b.text)
+        .join('\n');
+      if (text) return text;
+    }
+
+    // Try all known Salesforce Apex response field names
+    const fields = [
+      'result', 'content', 'data', 'output', 'message',
+      'strategy', 'strategyContent', 'emailContent', 'email',
+      'proposal', 'summary', 'brief', 'tips', 'text', 'body',
+      'response', 'generatedContent', 'aiContent', 'engagementPlan',
+      'meetingSummary', 'accountBrief', 'planContent', 'actionPlan'
+    ];
+
+    for (const field of fields) {
+      const val = obj[field];
+      if (val && typeof val === 'string' &&
+          val.trim() !== '' && val !== 'null') {
+        return val.trim();
+      }
+      if (val && typeof val === 'object' && val !== null) {
+        // Handle nested fields like data.email.body
+        const nested = parseAIResponse(val);
+        if (nested && !nested.includes('empty') && !nested.includes('No response')) {
+          return nested;
+        }
+      }
+    }
+
+    // Fallback for body strictly
+    if (obj.body && typeof obj.body === 'string') return obj.body;
+
+    // Last resort — stringify for debugging
+    const stringified = JSON.stringify(data, null, 2);
+    if (stringified !== '{}') return stringified;
+  }
+
+  return 'Unexpected response format. Please try again.';
+}
+
+// GET helper
+export async function apiGet<T>(endpoint: string): Promise<T | null> {
+  return apiFetch<T>(endpoint, { method: 'GET' });
+}
+
+// POST helper
+export async function apiPost<T>(endpoint: string, body: object): Promise<T | null> {
+  return apiFetch<T>(endpoint, {
+    method: 'POST',
+    body: body,
+  });
+}
+
+// ── Named aliases used across components ──
+
+export const fetchAccounts = () => 
+  apiGet('/accounts');
+
+export const fetchCompleteData = (accountId: string) => 
+  apiGet(`/completeData?accountId=${accountId}`);
+
+export const fetchAccountBrief = (accountId: string) => 
+  apiGet(`/accountBrief?accountId=${accountId}`);
+
+export const postEmail = (body: any) => 
+  apiPost('/email', body);
+
+// Alias for components expecting fetchEmail (POST with accountId)
+export const fetchEmail = (params: any, accountId?: string) => 
+  apiPost('/email', { ...(typeof params === 'object' ? params : {}), accountId: accountId || params?.accountId });
+
+export const postStrategy = (body: any) => 
+  apiPost('/strategy', body);
+
+// Alias for components expecting fetchStrategy
+export const fetchStrategy = (params: any, accountId?: string) => 
+  apiPost('/strategy', { ...(typeof params === 'object' ? params : {}), accountId: accountId || params?.accountId });
+
+export const postProposal = (body: any) => 
+  apiPost('/proposal', body);
+
+// Alias for components expecting fetchProposal
+export const fetchProposal = (params: any, accountId?: string) => 
+  apiPost('/proposal', { ...(typeof params === 'object' ? params : {}), accountId: accountId || params?.accountId });
+
+export const postMeetingPrep = (body: any) => 
+  apiPost('/meetingPrep', body);
+
+// Alias for components expecting fetchMeetingPrep
+export const fetchMeetingPrep = (params: any, accountId?: string) => 
+  apiPost('/meetingPrep', { ...(typeof params === 'object' ? params : {}), accountId: accountId || params?.accountId });
+
+// Alias for older components
+export const parseResponse = parseAIResponse;
 
 // --------- NORMALIZATION & TRANSFORMATION FUNCTIONS ---------
 

@@ -2,8 +2,9 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, Brain, Zap, BarChart3, Briefcase, Mail, Settings, LogOut, Radar, Upload, Activity, ChevronDown, Building2 } from 'lucide-react';
+import { Home, Brain, Zap, BarChart3, Briefcase, Mail, Settings, LogOut, Radar, Upload, Activity, ChevronDown, Building2, Cloud } from 'lucide-react';
 import { useAccount } from '@/context/account-context';
+import { useDataSource } from '@/context/DataSourceContext';
 
 interface SidebarItem {
   icon: React.ReactNode;
@@ -16,6 +17,10 @@ interface SidebarItem {
 export function Sidebar() {
   const pathname = usePathname();
   const { accounts, selectedAccountId, setSelectedAccountId, loading } = useAccount();
+  const { 
+    isUploadMode, globalData, selectedAccount, setSelectedAccount, 
+    getAccounts, switchToSalesforce 
+  } = useDataSource();
 
   const items: SidebarItem[] = [
     { icon: <Home className="w-5 h-5" />, label: 'Dashboard', href: '/', color: 'text-primary' },
@@ -42,30 +47,63 @@ export function Sidebar() {
 
       {/* Account Selector */}
       <div className="mb-6">
-        <label className="text-[10px] font-bold text-[#666] uppercase tracking-widest mb-2 block">
-          Salesforce Account
-        </label>
-        <div className="relative group">
-          <select
-            value={selectedAccountId}
-            onChange={(e) => setSelectedAccountId(e.target.value)}
-            disabled={loading}
-            className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white appearance-none cursor-pointer focus:outline-none focus:border-primary/50 transition-all hover:bg-white/10 pr-10"
-          >
-            {loading ? (
-              <option>Loading accounts...</option>
-            ) : (
-              accounts.map((acc) => (
-                <option key={acc.Id} value={acc.Id} className="bg-[#1a1a1a] text-white">
-                  {acc.Name}
-                </option>
-              ))
-            )}
-          </select>
-          <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-[#888] group-hover:text-white transition-colors">
-            <ChevronDown className="w-4 h-4" />
-          </div>
-        </div>
+        {!isUploadMode ? (
+          <>
+            <label className="text-[10px] font-bold text-[#666] uppercase tracking-widest mb-2 block">
+              Salesforce Account
+            </label>
+            <div className="relative group">
+              <select
+                value={selectedAccountId || ''}
+                onChange={(e) => setSelectedAccountId(e.target.value)}
+                disabled={loading}
+                className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white appearance-none cursor-pointer focus:outline-none focus:border-primary/50 transition-all hover:bg-white/10 pr-10"
+              >
+                {loading ? (
+                  <option>Loading accounts...</option>
+                ) : (
+                  accounts.map((acc: any) => (
+                    <option key={acc.Id} value={acc.Id} className="bg-[#1a1a1a] text-white">
+                      {acc.Name}
+                    </option>
+                  ))
+                )}
+              </select>
+              <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-[#888] group-hover:text-white transition-colors">
+                <ChevronDown className="w-4 h-4" />
+              </div>
+            </div>
+          </>
+        ) : (
+          <>
+            <label className="text-[10px] font-bold text-[#666] uppercase tracking-widest mb-1 block">
+              📂 UPLOADED DATA
+            </label>
+            <div className="relative group">
+              <select
+                value={selectedAccount?.id || ''}
+                onChange={(e) => {
+                  const acc = getAccounts().find(a => a.id === e.target.value);
+                  setSelectedAccount(acc || null);
+                }}
+                className="w-full bg-[#1e3a5f]/30 border border-blue-500/30 rounded-lg px-3 py-2.5 text-sm text-white appearance-none cursor-pointer focus:outline-none focus:border-blue-500/50 transition-all hover:bg-blue-500/10 pr-10"
+              >
+                <option value="" className="bg-[#0f172a]">All Accounts ({getAccounts().length})</option>
+                {getAccounts().map((acc) => (
+                  <option key={acc.id} value={acc.id} className="bg-[#0f172a]">
+                    {acc.name}
+                  </option>
+                ))}
+              </select>
+              <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-blue-400">
+                <ChevronDown className="w-4 h-4" />
+              </div>
+            </div>
+            <p className="text-[10px] text-blue-400/70 mt-2 font-medium overflow-hidden text-ellipsis whitespace-nowrap">
+              {globalData?.summary.activeDeals} deals · {globalData?.rawFileName}
+            </p>
+          </>
+        )}
       </div>
 
       {/* Navigation Items */}
@@ -99,6 +137,17 @@ export function Sidebar() {
 
       {/* Bottom Actions */}
       <div className="space-y-2 border-t border-white/10 pt-4">
+        {isUploadMode && (
+          <button 
+            onClick={() => {
+              if (window.confirm('Switch back to Salesforce?\nAll uploaded data will be cleared.')) switchToSalesforce();
+            }}
+            className="w-full flex items-center gap-3 px-4 py-3 rounded-lg bg-blue-500/10 border border-blue-500/20 text-blue-400 hover:bg-blue-500/20 transition-all duration-300"
+          >
+            <Cloud className="w-5 h-5" />
+            <span className="text-sm font-semibold">Use Salesforce Data</span>
+          </button>
+        )}
         <button className="w-full flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-white/5 border border-transparent transition-all duration-300 text-[#a3a3a3] hover:text-white">
           <LogOut className="w-5 h-5" />
           <span className="text-sm font-medium">Logout</span>

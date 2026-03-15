@@ -4,6 +4,7 @@ import { Analytics } from '@vercel/analytics/next'
 import { Sidebar } from '@/components/layout/sidebar'
 import { NotificationCenter } from '@/components/layout/notification-center-enhanced'
 import { AccountProvider } from '@/context/account-context'
+import { DataSourceProvider } from '@/context/DataSourceContext'
 import './globals.css'
 
 const _geist = Geist({ subsets: ["latin"] });
@@ -25,14 +26,16 @@ export default function RootLayout({
         <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" async></script>
       </head>
       <body className="font-sans antialiased bg-background text-foreground min-h-screen">
-        <AccountProvider>
-          <Sidebar />
-          <main className="ml-64 min-h-screen px-8 py-8">
-            {children}
-          </main>
-          <NotificationCenter />
-          <Analytics />
-        </AccountProvider>
+        <DataSourceProvider>
+          <AccountProvider>
+            <Sidebar />
+            <main className="ml-64 min-h-screen px-8 py-8">
+              {children}
+            </main>
+            <NotificationCenter />
+            <Analytics />
+          </AccountProvider>
+        </DataSourceProvider>
       </body>
     </html>
   )

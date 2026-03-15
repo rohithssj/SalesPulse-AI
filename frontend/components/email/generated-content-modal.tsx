@@ -13,6 +13,8 @@ interface GeneratedContentModalProps {
   isLoading?: boolean;
 }
 
+import { RenderedContent } from '../shared/RenderedContent';
+
 export function GeneratedContentModal({
   isOpen,
   onClose,
@@ -49,9 +51,7 @@ export function GeneratedContentModal({
               <p className="text-primary font-medium">Generating content...</p>
             </div>
           ) : (
-            <pre className="text-sm text-[#ccc] whitespace-pre-wrap font-sans leading-relaxed">
-              {content || 'No content generated.'}
-            </pre>
+            <RenderedContent data={content} fallback="No content generated." />
           )}
         </div>
 

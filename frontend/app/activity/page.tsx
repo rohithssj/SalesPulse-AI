@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { AlertCircle, CheckCircle, Mail, Zap, TrendingUp, Users, Clock, Filter, Archive, Trash2, Loader2 } from 'lucide-react';
 import { fetchCompleteData, normalizeActivities } from '@/lib/api';
+import { useAccount } from '@/context/account-context';
 
 interface Activity {
   id: string;
@@ -42,17 +43,22 @@ export default function ActivityPage() {
   const [filterType, setFilterType] = useState<string>('all');
   const [filterRead, setFilterRead] = useState<string>('all');
   
+  const { selectedAccountId } = useAccount();
   const [loading, setLoading] = useState(true);
   const [rawActivities, setRawActivities] = useState<any[]>([]);
 
   useEffect(() => {
-    fetchCompleteData().then(data => {
+    if (!selectedAccountId) {
+      setLoading(false);
+      return;
+    }
+    fetchCompleteData(selectedAccountId).then(data => {
       if (data) {
         setRawActivities(normalizeActivities(data).slice(0, 30)); // limit to 30 for performance
       }
       setLoading(false);
     });
-  }, []);
+  }, [selectedAccountId]);
 
   const activities: Activity[] = useMemo(() => {
     return rawActivities.map((act, i) => {

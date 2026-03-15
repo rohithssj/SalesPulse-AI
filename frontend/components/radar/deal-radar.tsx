@@ -16,21 +16,22 @@ interface Deal {
   distance: number;
 }
 
-export function DealRadar() {
-  const { selectedAccountId } = useAccount();
-  const [loading, setLoading] = useState(true);
-  const [rawOpps, setRawOpps] = useState<any[]>([]);
+import { usePageData } from '@/hooks/usePageData';
 
-  useEffect(() => {
-    if (!selectedAccountId) return;
-    setLoading(true);
-    fetchCompleteData(selectedAccountId).then((data) => {
-      if (data) {
-        setRawOpps(normalizeOpportunities(data).slice(0, 15)); // Keep visual clean with top 15
-      }
-      setLoading(false);
-    });
-  }, [selectedAccountId]);
+export function DealRadar() {
+  const { data: dealsData, loading } = usePageData(
+    '/completeData',
+    (ctx) => ctx.getSelectedAccountDeals()
+  );
+
+  const rawOpps = useMemo(() => {
+    if (!dealsData) return [];
+    // If dealsData is coming from Salesforce (raw api result), normalize it
+    if ((dealsData as any).opportunities !== undefined || Array.isArray(dealsData)) {
+      return normalizeOpportunities(dealsData).slice(0, 15);
+    }
+    return (dealsData as any[]).slice(0, 15);
+  }, [dealsData]);
 
   const deals: Deal[] = useMemo(() => {
     if (!rawOpps.length) return [];

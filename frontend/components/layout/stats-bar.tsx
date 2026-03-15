@@ -1,23 +1,19 @@
 'use client';
 
-import { useState, useEffect } from 'react';
 import { TrendingUp, Target, Users, Zap, Loader2 } from 'lucide-react';
-import { useAccount } from '@/context/account-context';
-import { fetchCompleteData, normalizeOpportunities } from '@/lib/api';
+import { usePageData } from '@/hooks/usePageData';
+import { normalizeOpportunities } from '@/lib/api';
 
 export function StatsBar() {
-  const { selectedAccountId } = useAccount();
-  const [data, setData] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    if (!selectedAccountId) return;
-    setLoading(true);
-    fetchCompleteData(selectedAccountId).then(res => {
-      setData(res);
-      setLoading(false);
-    });
-  }, [selectedAccountId]);
+  const { data, loading } = usePageData(
+    '/completeData',
+    (gd) => ({
+      activeDeals: gd.summary.activeDeals,
+      pipelineValue: gd.summary.totalPipelineValue,
+      winRate: gd.summary.winRate,
+      avgDealSize: gd.summary.avgDealSize,
+    })
+  );
 
   const stats = (() => {
     if (!data) return [
@@ -27,19 +23,39 @@ export function StatsBar() {
       { label: 'Avg Deal Size', value: '$0K', icon: <Users className="w-4 h-4" />, trend: 0, color: 'from-success to-warning' },
     ];
 
-    const opps = normalizeOpportunities(data);
-    const activeDeals = opps.filter(o => !['Closed Won', 'Closed Lost'].includes(o.dealStage)).length;
-    const totalPipe = opps.reduce((sum, o) => sum + (o.dealValue || 0), 0);
-    const closed = opps.filter(o => o.dealStage?.startsWith('Closed')).length;
-    const won = opps.filter(o => o.dealStage === 'Closed Won').length;
-    const winRate = closed > 0 ? Math.round((won / closed) * 100) : 42;
-    const avgSize = opps.length > 0 ? Math.round(totalPipe / opps.length) : 0;
+    // For salesforce mode, we might still receive the full data object which needs normalization
+    // usePageData handles the switching logic, but if output is from salesforce it might be raw
+    const getStats = () => {
+      // If we are in upload mode, data is already the object we selected
+      // If we are in salesforce mode, data is the result of apiGet('/completeData')
+      const isRaw = (data as any).opportunities !== undefined || Array.isArray(data);
+      if (isRaw) {
+        const opps = normalizeOpportunities(data);
+        const activeDeals = opps.filter(o => !['Closed Won', 'Closed Lost'].includes(o.dealStage)).length;
+        const totalPipe = opps.reduce((sum, o) => sum + (o.dealValue || 0), 0);
+        const closed = opps.filter(o => o.dealStage?.startsWith('Closed')).length;
+        const won = opps.filter(o => o.dealStage === 'Closed Won').length;
+        const winRate = closed > 0 ? Math.round((won / closed) * 100) : 42;
+        const avgSize = opps.length > 0 ? Math.round(totalPipe / opps.length) : 0;
+        
+        return { activeDeals, totalPipe, winRate, avgSize };
+      }
+      
+      return {
+        activeDeals: (data as any).activeDeals,
+        totalPipe: (data as any).pipelineValue,
+        winRate: (data as any).winRate,
+        avgSize: (data as any).avgDealSize
+      };
+    };
+
+    const s = getStats();
 
     return [
-      { label: 'Active Deals', value: activeDeals, icon: <Target className="w-4 h-4" />, trend: 12, color: 'from-primary to-primary-light' },
-      { label: 'Pipeline Value', value: `$${(totalPipe / 1000).toFixed(1)}K`, icon: <TrendingUp className="w-4 h-4" />, trend: 8.5, color: 'from-secondary to-secondary-light' },
-      { label: 'Win Rate', value: `${winRate}%`, icon: <Zap className="w-4 h-4" />, trend: 5.2, color: 'from-accent to-accent-light' },
-      { label: 'Avg Deal Size', value: `$${(avgSize / 1000).toFixed(1)}K`, icon: <Users className="w-4 h-4" />, trend: 3.1, color: 'from-success to-warning' },
+      { label: 'Active Deals', value: s.activeDeals, icon: <Target className="w-4 h-4" />, trend: 12, color: 'from-primary to-primary-light' },
+      { label: 'Pipeline Value', value: `$${(s.totalPipe / 1000).toFixed(1)}K`, icon: <TrendingUp className="w-4 h-4" />, trend: 8.5, color: 'from-secondary to-secondary-light' },
+      { label: 'Win Rate', value: `${s.winRate}%`, icon: <Zap className="w-4 h-4" />, trend: 5.2, color: 'from-accent to-accent-light' },
+      { label: 'Avg Deal Size', value: `$${(s.avgSize / 1000).toFixed(1)}K`, icon: <Users className="w-4 h-4" />, trend: 3.1, color: 'from-success to-warning' },
     ];
   })();
 
