@@ -2,7 +2,9 @@
 
 import { useState, useEffect } from 'react';
 import { Copy, RotateCw, WandIcon, Download, Save, Loader2 } from 'lucide-react';
-import { fetchAccountBrief, fetchStrategy, fetchEmail } from '@/lib/api';
+import { fetchAccountBrief, fetchStrategy, fetchEmail, fetchMeetingPrep, fetchProposal } from '@/lib/api';
+import { useAccount } from '@/context/account-context';
+import { GeneratedContentModal } from './generated-content-modal';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -61,54 +63,118 @@ const emailTemplates: GeneratedEmail[] = [
   }
 ];
 
+import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard';
+
+const CONTENT_LABELS: Record<string, { title: string; subtitle: (name: string) => string }> = {
+  'follow-up': {
+    title: '📧 Follow-up Email',
+    subtitle: (name) => `Personalized follow-up for ${name}`
+  },
+  'cold-outreach': {
+    title: '🌐 Cold Outreach',
+    subtitle: (name) => `Strategic outreach to ${name}`
+  },
+  'meeting-recap': {
+    title: '📋 Meeting Summary',
+    subtitle: (name) => `Meeting recap document for ${name}`
+  },
+  'proposal': {
+    title: '📄 Sales Proposal',
+    subtitle: (name) => `Custom proposal for ${name}`
+  },
+  're-engagement': {
+    title: '🔄 Re-engagement Email',
+    subtitle: (name) => `Re-engagement outreach for ${name}`
+  }
+};
+
 export function AIWorkspacePanel() {
+  const { accounts, selectedAccountId } = useAccount();
+  const selectedAccount = accounts.find(a => a.Id === selectedAccountId);
+  const { copied, copy } = useCopyToClipboard();
   const [activeTab, setActiveTab] = useState('intel');
-  const [emailData, setEmailData] = useState<any>(emailTemplates[0]);
+  
   const [tone, setTone] = useState<'formal' | 'friendly' | 'persuasive'>('formal');
   const [emailType, setEmailType] = useState('follow-up');
-  const [copied, setCopied] = useState(false);
+  const [emailData, setEmailData] = useState<any>({ subject: '', content: '' });
 
-  const [intelData, setIntelData] = useState<any>(conversationData);
+  const [intelData, setIntelData] = useState<any>(null);
   const [strategyData, setStrategyData] = useState<any>(null);
   
   const [loadingIntel, setLoadingIntel] = useState(true);
-  const [loadingStrategy, setLoadingStrategy] = useState(true);
+  const [loadingStrategy, setLoadingStrategy] = useState(false);
   const [loadingEmail, setLoadingEmail] = useState(false);
 
   useEffect(() => {
-    let mounted = true;
-    fetchAccountBrief().then(d => {
-      if (mounted) {
-        if (d && d.summary) setIntelData({ ...conversationData, ...d.summary });
-        else if (d) setIntelData({ ...conversationData, ...d });
-        setLoadingIntel(false);
-      }
+    if (!selectedAccountId) return;
+    setLoadingIntel(true);
+    fetchAccountBrief(selectedAccountId).then(d => {
+      if (d) setIntelData(d);
+      setLoadingIntel(false);
     });
+  }, [selectedAccountId]);
 
-    fetchStrategy().then(d => {
-      if (mounted) {
+  useEffect(() => {
+    if (activeTab === 'strategy' && !strategyData && selectedAccountId) {
+      setLoadingStrategy(true);
+      fetchStrategy({}, selectedAccountId).then(d => {
         if (d) setStrategyData(d);
         setLoadingStrategy(false);
-      }
-    });
-    return () => { mounted = false; };
-  }, []);
+      });
+    }
+  }, [activeTab, selectedAccountId, strategyData]);
 
   const handleGenerate = async () => {
+    if (!selectedAccountId) return;
     setLoadingEmail(true);
-    const res = await fetchEmail({ tone, type: emailType });
-    if (res && res.email) {
-      setEmailData({ subject: res.email.subject || 'Generated Email', content: res.email.body || res.email, type: emailType, tone });
-    } else if (res) {
-      setEmailData({ subject: 'Generated Email', content: typeof res === 'string' ? res : JSON.stringify(res), type: emailType, tone });
+    let res;
+    
+    try {
+      const baseContext = `Generate a ${tone} ${emailType.replace('-', ' ')} for ${selectedAccount?.Name || 'the account'}. 
+        Industry: ${selectedAccount?.Industry || 'enterprise'}.
+        Tone: ${tone}.
+        Buying signals: ${intelData?.buyingSignals?.join(', ') || 'recent engagement'}.
+        Make it personal, specific, and include a clear call to action.`;
+
+      if (emailType === 'proposal') {
+        res = await fetchProposal({ 
+          tone,
+          context: `Generate a comprehensive sales proposal for ${selectedAccount?.Name}. Include executive summary, pain points, proposed solution, and ROI. ${baseContext}`
+        }, selectedAccountId);
+      } else if (emailType === 'meeting-recap') {
+        res = await fetchMeetingPrep({
+          tone,
+          context: `Generate a professional meeting summary document for ${selectedAccount?.Name}. Include decisions made and action items. ${baseContext}`
+        }, selectedAccountId);
+      } else {
+        res = await fetchEmail({ 
+          tone, 
+          type: emailType,
+          context: baseContext
+        }, selectedAccountId);
+      }
+
+      const content = res?.email?.body || res?.content || res?.summary || res?.notes || (typeof res === 'string' ? res : JSON.stringify(res));
+      setEmailData({ 
+        subject: res?.email?.subject || CONTENT_LABELS[emailType]?.title || 'Generated Content', 
+        content: content, 
+        type: emailType, 
+        tone 
+      });
+    } catch (err) {
+      console.error('Generation failed', err);
+    } finally {
+      setLoadingEmail(false);
     }
-    setLoadingEmail(false);
+  };
+
+  const onTypeChange = (type: string) => {
+    setEmailType(type);
+    setEmailData({ subject: '', content: '' }); // Clear previous output
   };
 
   const handleCopy = () => {
-    navigator.clipboard.writeText(emailData.content);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    copy(emailData.content);
   };
 
   const getEngagementColor = (level: string) => {
@@ -228,7 +294,7 @@ export function AIWorkspacePanel() {
                       ? 'bg-primary/20 border-primary/50 text-primary'
                       : 'text-[#888] hover:bg-white/5'
                   }`}
-                  onClick={() => setEmailType(type)}
+                  onClick={() => onTypeChange(type)}
                 >
                   {type.replace('-', ' ')}
                 </Button>
@@ -261,20 +327,21 @@ export function AIWorkspacePanel() {
 
           <div className="space-y-3">
             <label className="text-xs font-semibold text-[#a3a3a3] uppercase tracking-wider block">
-              Email Subject
+              {CONTENT_LABELS[emailType]?.title || 'Generated Content'}
             </label>
+            <p className="text-xs text-[#888] -mt-2">
+              {CONTENT_LABELS[emailType]?.subtitle(selectedAccount?.Name || 'Account') || 'AI generated content'}
+            </p>
             <input
               type="text"
               value={emailData.subject}
+              placeholder="Subject will appear here..."
               className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-[#666] focus:outline-none focus:border-primary/50"
               readOnly
             />
           </div>
 
           <div className="space-y-3 relative">
-            <label className="text-xs font-semibold text-[#a3a3a3] uppercase tracking-wider block">
-              Email Content
-            </label>
             <div className="relative">
               {loadingEmail && (
                 <div className="absolute inset-0 z-10 bg-[#121212]/50 flex items-center justify-center rounded-md backdrop-blur-sm">
@@ -283,6 +350,7 @@ export function AIWorkspacePanel() {
               )}
               <Textarea
                 value={emailData.content}
+                placeholder="Genrated content will appear here..."
                 readOnly
                 className="min-h-48 bg-white/5 border border-white/10 text-white text-sm resize-none relative z-0"
               />
@@ -296,7 +364,7 @@ export function AIWorkspacePanel() {
               className="flex-1 gap-2 bg-white/10 hover:bg-white/20 text-white border border-white/20"
             >
               <Copy className="w-4 h-4" />
-              {copied ? 'Copied!' : 'Copy Email'}
+              {copied ? '✓ Copied!' : 'Copy to Clipboard'}
             </Button>
             <Button size="sm" onClick={handleGenerate} disabled={loadingEmail} className="flex-1 gap-2 bg-white/10 hover:bg-white/20 text-white border border-white/20">
               <RotateCw className={`w-4 h-4 ${loadingEmail ? 'animate-spin' : ''}`} />

@@ -68,10 +68,12 @@ export function StatsBar() {
             <div className={`text-2xl font-bold bg-gradient-to-r ${stat.color} bg-clip-text text-transparent`}>
               {stat.value}
             </div>
-            {stat.trend && (
-              <div className="flex items-center gap-1 text-xs font-semibold text-success">
-                <TrendingUp className="w-3 h-3" />
-                {stat.trend}%
+            {stat.trend !== undefined && (
+              <div 
+                className={`flex items-center gap-1 text-xs font-semibold ${stat.trend >= 0 ? 'text-success' : 'text-red-500'}`}
+              >
+                <span>{stat.trend >= 0 ? '↑' : '↓'}</span>
+                {Math.abs(stat.trend)}%
               </div>
             )}
           </div>

@@ -1,9 +1,12 @@
-'use client';
-
-import { Zap, MessageSquare, AlertTriangle, TrendingUp } from 'lucide-react';
+import { useState } from 'react';
+import { Zap, MessageSquare, AlertTriangle, TrendingUp, Loader2 } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { useAccount } from '@/context/account-context';
+import { fetchEmail, fetchProposal, fetchStrategy, fetchMeetingPrep } from '@/lib/api';
+import { GeneratedContentModal } from './generated-content-modal';
+import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard';
 
 interface BuyingSignal {
   id: string;
@@ -14,6 +17,7 @@ interface BuyingSignal {
   confidence: number;
   timestamp: string;
   action: string;
+  accountId?: string;
 }
 
 const buyingSignals: BuyingSignal[] = [
@@ -79,28 +83,109 @@ const buyingSignals: BuyingSignal[] = [
   }
 ];
 
-const getSignalIcon = (type: string) => {
-  switch (type) {
-    case 'proposal_interest':
-      return <Zap className="w-5 h-5 text-warning" />;
-    case 'pricing_discussion':
-      return <TrendingUp className="w-5 h-5 text-success" />;
-    case 'engagement':
-      return <MessageSquare className="w-5 h-5 text-primary" />;
-    case 'inactivity':
-      return <AlertTriangle className="w-5 h-5 text-red-500" />;
-    default:
-      return <Zap className="w-5 h-5 text-primary" />;
-  }
-};
-
-const getConfidenceColor = (confidence: number) => {
-  if (confidence >= 90) return 'text-success';
-  if (confidence >= 80) return 'text-warning';
-  return 'text-red-500';
-};
-
 export function SignalsPanel() {
+  const { accounts, selectedAccountId } = useAccount();
+  const selectedAccount = accounts.find(a => a.Id === selectedAccountId);
+  const { copied, copy } = useCopyToClipboard();
+  const [modalOpen, setModalOpen] = useState(false);
+  const [modalContent, setModalContent] = useState('');
+  const [modalTitle, setModalTitle] = useState('');
+  const [isGenerating, setIsGenerating] = useState(false);
+
+  const handleSignalAction = async (signal: BuyingSignal) => {
+    setModalTitle(signal.title);
+    setModalContent('');
+    setIsGenerating(true);
+    setModalOpen(true);
+
+    try {
+      let res;
+      const accountId = selectedAccountId;
+      const accountName = selectedAccount?.Name || signal.deal;
+
+      if (signal.type === 'proposal_interest') {
+        res = await fetchProposal({
+          accountId,
+          accountName,
+          tone: "Formal",
+          type: "proposal",
+          emailType: "proposal_request_response",
+          context: `The account ${accountName} has explicitly requested a detailed project scope and feature breakdown. Signal detected ${signal.timestamp}. Confidence: ${signal.confidence}%. Generate a formal proposal email that addresses their request with specific deliverables, timeline, and pricing structure.`,
+          signalType: signal.type,
+          urgency: "high"
+        }, accountId);
+      } else if (signal.type === 'pricing_discussion') {
+        res = await fetchEmail({
+          accountId,
+          accountName,
+          tone: "Formal",
+          type: "pricing",
+          emailType: "pricing_details",
+          context: `${accountName} has inquired about the enterprise plan and annual licensing. Detected ${signal.timestamp}. Generate a pricing email that covers enterprise plan tiers, annual vs monthly billing, volume discounts, and a clear call to action to schedule a pricing call.`,
+          signalType: "pricing_inquiry",
+          urgency: "medium"
+        }, accountId);
+      } else if (signal.type === 'engagement') {
+        res = await fetchEmail({
+          accountId,
+          accountName,
+          tone: "Friendly",
+          type: "followup",
+          emailType: "engagement_followup",
+          context: `${accountName} has shown high email engagement - ${signal.description}. Detected ${signal.timestamp}. Generate a warm follow-up email that acknowledges their interest, offers a personalized demo, and creates urgency around a limited-time offer.`,
+          signalType: "high_engagement",
+          urgency: "high"
+        }, accountId);
+      } else if (signal.type === 'inactivity') {
+        res = await fetchEmail({
+          accountId,
+          accountName,
+          tone: "Friendly",
+          type: "reengagement",
+          emailType: "reengagement",
+          context: `${accountName} has gone silent (${signal.description}). Generate a re-engagement email that re-establishes value, acknowledges the gap in communication, references their original pain points, and offers something new (case study, ROI report, or exclusive offer) to restart the conversation.`,
+          signalType: "dormant",
+          urgency: "low"
+        }, accountId);
+      } else {
+        // Fallback for Strategy or Meeting Prep
+        if (signal.action.includes('Meeting')) {
+          res = await fetchMeetingPrep({ context: signal.description }, accountId);
+        } else {
+          res = await fetchStrategy({ context: signal.description }, accountId);
+        }
+      }
+
+      const content = res?.email?.body || res?.content || res?.summary || res?.result || (typeof res === 'string' ? res : JSON.stringify(res));
+      setModalContent(content);
+    } catch (err) {
+      setModalContent('Failed to generate response. Please try again.');
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  const getSignalIcon = (type: string) => {
+    switch (type) {
+      case 'proposal_interest':
+        return <Zap className="w-5 h-5 text-warning" />;
+      case 'pricing_discussion':
+        return <TrendingUp className="w-5 h-5 text-success" />;
+      case 'engagement':
+        return <MessageSquare className="w-5 h-5 text-primary" />;
+      case 'inactivity':
+        return <AlertTriangle className="w-5 h-5 text-red-500" />;
+      default:
+        return <Zap className="w-5 h-5 text-primary" />;
+    }
+  };
+
+  const getConfidenceColor = (confidence: number) => {
+    if (confidence >= 90) return 'text-success';
+    if (confidence >= 80) return 'text-warning';
+    return 'text-red-500';
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -141,7 +226,11 @@ export function SignalsPanel() {
                     <p className="text-xs text-[#a3a3a3] font-medium">{signal.deal}</p>
                     <p className="text-xs text-[#666]">{signal.timestamp}</p>
                   </div>
-                  <Button size="sm" className="bg-primary/20 hover:bg-primary/30 text-primary border border-primary/30">
+                  <Button 
+                    size="sm" 
+                    onClick={() => handleSignalAction(signal)}
+                    className="bg-primary/20 hover:bg-primary/30 text-primary border border-primary/30"
+                  >
                     {signal.action}
                   </Button>
                 </div>
@@ -150,6 +239,14 @@ export function SignalsPanel() {
           </Card>
         ))}
       </div>
+
+      <GeneratedContentModal 
+        isOpen={modalOpen}
+        onClose={() => setModalOpen(false)}
+        title={modalTitle}
+        content={modalContent}
+        isLoading={isGenerating}
+      />
 
       <Card className="glass rounded-xl p-6 border border-white/10 bg-white/[0.01]">
         <h4 className="text-sm font-semibold text-white mb-4">Signal Insights</h4>

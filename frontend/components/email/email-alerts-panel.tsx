@@ -6,12 +6,19 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useAccount } from '@/context/account-context';
-import { fetchCompleteData } from '@/lib/api';
+import { fetchCompleteData, fetchEmail } from '@/lib/api';
+import { GeneratedContentModal } from './generated-content-modal';
 
 export function EmailAlertsPanel() {
-  const { selectedAccountId } = useAccount();
+  const { accounts, selectedAccountId } = useAccount();
+  const selectedAccount = accounts.find(a => a.Id === selectedAccountId);
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [modalContent, setModalContent] = useState('');
+  const [modalTitle, setModalTitle] = useState('');
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [generationProgress, setGenerationProgress] = useState<number | null>(null);
 
   useEffect(() => {
     if (!selectedAccountId) return;
@@ -30,10 +37,9 @@ export function EmailAlertsPanel() {
     dealName: s.account || 'Unknown Account',
     daysOverdue: s.confidence > 90 ? 3 : 0,
     priority: s.confidence > 85 ? 'high' : 'medium',
-    action: 'Generate Response'
+    action: 'Quick Draft'
   }));
 
-  // Fallback if no signals
   const alertsToDisplay = emailAlerts.length > 0 ? emailAlerts : [
     {
       id: 'default-1',
@@ -46,6 +52,57 @@ export function EmailAlertsPanel() {
       action: 'Quick Draft'
     }
   ];
+
+  const handleQuickDraft = async (alert: any) => {
+    setModalTitle(`Draft for ${alert.dealName}`);
+    setModalContent('');
+    setIsGenerating(true);
+    setModalOpen(true);
+
+    try {
+      const res = await fetchEmail({
+        accountId: selectedAccountId,
+        accountName: selectedAccount?.Name,
+        tone: 'Friendly',
+        type: 'followup',
+        emailType: 'scheduled_outreach',
+        context: `Scheduled outreach based on recent engagement with ${selectedAccount?.Name || alert.dealName}. This is a timely follow-up to maintain momentum. Alert: ${alert.title}. ${alert.description}.`,
+        urgency: (alert.priority as any) || "medium"
+      });
+      
+      const content = res?.email?.body || res?.content || (typeof res === 'string' ? res : JSON.stringify(res));
+      setModalContent(content);
+    } catch (err) {
+      setModalContent('Failed to generate draft. Please try again.');
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  const handleGenerateAll = async () => {
+    setGenerationProgress(0);
+    let successCount = 0;
+
+    for (let i = 0; i < alertsToDisplay.length; i++) {
+      try {
+        await fetchEmail({
+          accountId: selectedAccountId,
+          tone: 'Friendly',
+          type: 'followup',
+          context: alertsToDisplay[i].description
+        });
+        successCount++;
+      } catch (err) {
+        console.error('Failed to generate for', alertsToDisplay[i].dealName);
+      }
+      setGenerationProgress(Math.round(((i + 1) / alertsToDisplay.length) * 100));
+    }
+
+    setModalTitle('Bulk Generation Complete');
+    setModalContent(`Successfully generated ${successCount} out of ${alertsToDisplay.length} email drafts.`);
+    setModalOpen(true);
+    setGenerationProgress(null);
+  };
 
   const getPriorityColor = (priority: string) => {
     switch (priority) {
@@ -78,9 +135,17 @@ export function EmailAlertsPanel() {
           <h3 className="text-lg font-semibold text-white">Email Activity Alerts</h3>
           <p className="text-sm text-[#888] mt-1">{alertsToDisplay.length} action items requiring your attention</p>
         </div>
-        <Button className="bg-primary hover:bg-primary/90 text-white">
-          <Mail className="w-4 h-4 mr-2" />
-          Generate All
+        <Button 
+          onClick={handleGenerateAll}
+          disabled={generationProgress !== null}
+          className="bg-primary hover:bg-primary/90 text-white"
+        >
+          {generationProgress !== null ? (
+            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+          ) : (
+            <Mail className="w-4 h-4 mr-2" />
+          )}
+          {generationProgress !== null ? `Generating (${generationProgress}%)` : 'Generate All'}
         </Button>
       </div>
 
@@ -113,6 +178,7 @@ export function EmailAlertsPanel() {
               </div>
               <Button
                 size="sm"
+                onClick={() => handleQuickDraft(alert)}
                 className="flex-shrink-0 bg-white/10 hover:bg-white/20 text-white border border-white/20"
               >
                 {alert.action}
@@ -121,6 +187,14 @@ export function EmailAlertsPanel() {
           </Card>
         ))}
       </div>
+
+      <GeneratedContentModal 
+        isOpen={modalOpen}
+        onClose={() => setModalOpen(false)}
+        title={modalTitle}
+        content={modalContent}
+        isLoading={isGenerating}
+      />
 
       <Card className="glass rounded-xl p-6 border border-white/10 bg-white/[0.01]">
         <h4 className="text-sm font-semibold text-white mb-4">Email Activity Summary</h4>

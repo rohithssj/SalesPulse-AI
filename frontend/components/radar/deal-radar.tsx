@@ -4,11 +4,13 @@ import { useState, useEffect, useMemo } from 'react';
 import { fetchCompleteData, normalizeOpportunities } from '@/lib/api';
 import { useAccount } from '@/context/account-context';
 import { Loader2 } from 'lucide-react';
+import { getDealColor } from '@/lib/deal-colors';
 
 interface Deal {
   id: string;
   name: string;
   value: number;
+  probability: number;
   status: 'healthy' | 'moderate' | 'risk';
   angle: number;
   distance: number;
@@ -43,9 +45,10 @@ export function DealRadar() {
         id: opp.id,
         name: opp.name || opp.accountName || 'Unknown Deal',
         value: opp.dealValue || 0,
+        probability: score,
         status,
         angle: (i * (360 / Math.max(rawOpps.length, 1))) % 360,
-        distance: Math.max(0.2, 1 - (score / 100))
+        distance: Math.max(0.15, 1 - (score / 100))
       };
     });
   }, [rawOpps]);
@@ -140,24 +143,42 @@ export function DealRadar() {
             {/* Deal nodes */}
             {deals.map((deal) => {
               const pos = convertPolar(deal.angle, deal.distance);
-              const color = getStatusColor(deal.status);
+              const dealStyle = getDealColor(deal.probability);
+              const dotSize = Math.max(4, Math.min(12, (deal.value / 1000000) * 8 + 4));
+              
               return (
-                <g key={deal.id}>
+                <g key={deal.id} className="cursor-pointer group">
                   {/* Glow circle */}
                   <circle
                     cx={pos.x}
                     cy={pos.y}
-                    r={12}
-                    fill={color}
-                    opacity="0.1"
-                    className="animate-pulse-glow"
+                    r={dotSize + 6}
+                    fill={dealStyle.dot}
+                    opacity="0.2"
+                    className={deal.probability >= 75 ? "animate-pulse-glow" : ""}
                   />
                   {/* Main node */}
-                  <circle cx={pos.x} cy={pos.y} r={6} fill={color} stroke="rgba(255,255,255,0.3)" strokeWidth="2" />
-                  {/* Outer ring */}
-                  <circle cx={pos.x} cy={pos.y} r={8} fill="none" stroke={color} strokeWidth="1" opacity="0.5" />
+                  <circle 
+                    cx={pos.x} 
+                    cy={pos.y} 
+                    r={dotSize} 
+                    fill={dealStyle.dot} 
+                    stroke="rgba(255,255,255,0.4)" 
+                    strokeWidth="1.5" 
+                    style={{ filter: `drop-shadow(0 0 4px ${dealStyle.glow})` }}
+                  />
                   
-                  {/* Tooltip/Label could optionally be added here if desired */}
+                  {/* Deal Label */}
+                  <text
+                    x={pos.x + dotSize + 4}
+                    y={pos.y + 4}
+                    fill="white"
+                    fontSize="10"
+                    className="opacity-70 group-hover:opacity-100 transition-opacity font-medium pointer-events-none"
+                    style={{ textShadow: '0 1px 2px rgba(0,0,0,0.8)' }}
+                  >
+                    {deal.name}
+                  </text>
                 </g>
               );
             })}
@@ -165,19 +186,23 @@ export function DealRadar() {
         </div>
       )}
 
-      {/* Legend */}
-      <div className="mt-6 grid grid-cols-3 gap-4 text-xs">
-        <div className="flex items-center gap-2">
-          <div className="w-3 h-3 rounded-full bg-success" />
-          <span className="text-muted-foreground">Healthy</span>
+      {/* Radar Legend */}
+      <div className="radar-legend mt-4 flex items-center justify-center gap-6 border-t border-white/5 pt-4">
+        <div className="flex items-center gap-1.5 transition-all hover:opacity-100 opacity-70">
+          <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: '#22c55e', boxShadow: '0 0 8px rgba(34, 197, 94, 0.4)' }} />
+          <span className="text-[11px] font-semibold text-[#bbf7d0]">High (75%+)</span>
         </div>
-        <div className="flex items-center gap-2">
-          <div className="w-3 h-3 rounded-full bg-warning" />
-          <span className="text-muted-foreground">Moderate</span>
+        <div className="flex items-center gap-1.5 transition-all hover:opacity-100 opacity-70">
+          <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: '#f59e0b', boxShadow: '0 0 8px rgba(245, 158, 11, 0.4)' }} />
+          <span className="text-[11px] font-semibold text-[#fde68a]">Med (50-74%)</span>
         </div>
-        <div className="flex items-center gap-2">
-          <div className="w-3 h-3 rounded-full bg-destructive" />
-          <span className="text-muted-foreground">Risk</span>
+        <div className="flex items-center gap-1.5 transition-all hover:opacity-100 opacity-70">
+          <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: '#f97316', boxShadow: '0 0 8px rgba(249, 115, 22, 0.4)' }} />
+          <span className="text-[11px] font-semibold text-[#fed7aa]">At Risk (25-49%)</span>
+        </div>
+        <div className="flex items-center gap-1.5 transition-all hover:opacity-100 opacity-70">
+          <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: '#ef4444', boxShadow: '0 0 8px rgba(239, 68, 68, 0.4)' }} />
+          <span className="text-[11px] font-semibold text-[#fecaca]">Crit (&lt;25%)</span>
         </div>
       </div>
     </div>

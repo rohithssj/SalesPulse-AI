@@ -1,110 +1,116 @@
 'use client';
 
-import { Copy, Edit, Trash2, Plus, Tag } from 'lucide-react';
+import { useState } from 'react';
+import { Copy, Edit, Trash2, Plus, Tag, Check, X } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-
-interface EmailTemplate {
-  id: string;
-  name: string;
-  category: 'follow-up' | 'outreach' | 'closing' | 'general';
-  subject: string;
-  preview: string;
-  usageCount: number;
-  lastUsed: string;
-  successRate: number;
-}
-
-const emailTemplates: EmailTemplate[] = [
-  {
-    id: '1',
-    name: 'Enterprise Follow-up',
-    category: 'follow-up',
-    subject: 'Quick Follow-up: Enterprise Plan Details',
-    preview: 'Hi [Name], I wanted to follow up on your interest in our enterprise plan...',
-    usageCount: 24,
-    lastUsed: '2 days ago',
-    successRate: 78
-  },
-  {
-    id: '2',
-    name: 'Cold Outreach - Tech',
-    category: 'outreach',
-    subject: 'Quick Question About Tech Stack',
-    preview: 'Hi [Name], I noticed [Company] is scaling their engineering team...',
-    usageCount: 15,
-    lastUsed: '4 days ago',
-    successRate: 42
-  },
-  {
-    id: '3',
-    name: 'Closing Proposal',
-    category: 'closing',
-    subject: 'Your Custom Solution Ready - Next Steps',
-    preview: 'Hi [Name], We\'ve prepared your custom solution package...',
-    usageCount: 8,
-    lastUsed: '1 week ago',
-    successRate: 85
-  },
-  {
-    id: '4',
-    name: 'Meeting Recap',
-    category: 'general',
-    subject: 'Thank You - Meeting Recap & Action Items',
-    preview: 'Hi [Name], Thank you for taking the time to meet...',
-    usageCount: 31,
-    lastUsed: 'today',
-    successRate: 92
-  },
-  {
-    id: '5',
-    name: 'Re-engagement Campaign',
-    category: 'follow-up',
-    subject: 'We Miss You - Special Offer Inside',
-    preview: 'Hi [Name], It\'s been a while since we last spoke...',
-    usageCount: 12,
-    lastUsed: '3 days ago',
-    successRate: 58
-  },
-  {
-    id: '6',
-    name: 'Pricing Discussion',
-    category: 'outreach',
-    subject: 'Pricing Options That Fit Your Budget',
-    preview: 'Hi [Name], Based on your requirements, here are pricing options...',
-    usageCount: 19,
-    lastUsed: '5 days ago',
-    successRate: 72
-  }
-];
-
-const getCategoryColor = (category: string) => {
-  switch (category) {
-    case 'follow-up':
-      return 'bg-primary/10 text-primary border-primary/30';
-    case 'outreach':
-      return 'bg-secondary/10 text-secondary border-secondary/30';
-    case 'closing':
-      return 'bg-success/10 text-success border-success/30';
-    default:
-      return 'bg-white/10 text-[#a3a3a3] border-white/30';
-  }
-};
+import { useAccount } from '@/context/account-context';
+import { fetchEmail } from '@/lib/api';
+import { GeneratedContentModal } from './generated-content-modal';
+import { useTemplates, EmailTemplate } from '@/hooks/use-templates';
+import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard';
 
 export function TemplatesPanel() {
-  const categories = ['all', 'follow-up', 'outreach', 'closing', 'general'];
-  const active = 'all';
+  const { accounts, selectedAccountId } = useAccount();
+  const selectedAccount = accounts.find(a => a.Id === selectedAccountId);
+  const { templates, addTemplate, updateTemplate, deleteTemplate, incrementUsage } = useTemplates();
+  const { copied: libraryCopied, copy: copyTemplate } = useCopyToClipboard();
+  
+  const [modalOpen, setModalOpen] = useState(false);
+  const [modalContent, setModalContent] = useState('');
+  const [modalTitle, setModalTitle] = useState('');
+  const [isGenerating, setIsGenerating] = useState(false);
+  
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [editingTemplate, setEditingTemplate] = useState<EmailTemplate | null>(null);
+
+  const categories = ['all', 'follow-up', 'outreach', 'closing', 'general'] as const;
+
+  const handleUse = async (template: EmailTemplate) => {
+    incrementUsage(template.id);
+    setModalTitle(`Personalizing ${template.name}`);
+    setModalContent('');
+    setIsGenerating(true);
+    setModalOpen(true);
+
+    try {
+      const res = await fetchEmail({
+        accountId: selectedAccountId,
+        accountName: selectedAccount?.Name,
+        tone: 'Friendly',
+        type: 'template',
+        emailType: template.category,
+        templateName: template.name,
+        context: `Use the "${template.name}" email template as a base structure.
+          Personalize it for ${selectedAccount?.Name || 'the account'}.
+          Replace all placeholder variables: 
+          [Name] → ${selectedAccount?.Name || 'Contact'},
+          [Company] → ${selectedAccount?.Name || 'Company'},
+          [Product] → SalesPulse AI platform.
+          Template base: ${template.preview}.
+          Adapt the tone to be friendly and make it feel genuinely written for this specific account.
+          Reference their industry (${selectedAccount?.Industry || 'technology'}) if relevant.`
+      }, selectedAccountId);
+
+      const generated = res?.email?.body || res?.content || res?.result || (typeof res === 'string' ? res : JSON.stringify(res));
+      setModalContent(generated || template.preview);
+    } catch (err) {
+      setModalContent('Failed to personalize template. Using default preview.\n\n' + template.preview);
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  const handleEdit = (template: EmailTemplate) => {
+    setEditingTemplate({ ...template });
+    setEditModalOpen(true);
+  };
+
+  const handleNew = () => {
+    setEditingTemplate({
+      id: '',
+      name: '',
+      category: 'general',
+      subject: '',
+      preview: '',
+      usageCount: 0,
+      lastUsed: 'Never',
+      successRate: 0
+    });
+    setEditModalOpen(true);
+  };
+
+  const handleSave = () => {
+    if (editingTemplate) {
+      if (editingTemplate.id) {
+        updateTemplate(editingTemplate.id, editingTemplate);
+      } else {
+        addTemplate(editingTemplate);
+      }
+      setEditModalOpen(false);
+      setEditingTemplate(null);
+    }
+  };
+
+  const getCategoryColor = (category: string) => {
+    switch (category) {
+      case 'follow-up': return 'bg-primary/10 text-primary border-primary/30';
+      case 'outreach': return 'bg-secondary/10 text-secondary border-secondary/30';
+      case 'closing': return 'bg-success/10 text-success border-success/30';
+      default: return 'bg-white/10 text-[#a3a3a3] border-white/30';
+    }
+  };
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
           <h3 className="text-lg font-semibold text-white">Email Templates Library</h3>
-          <p className="text-sm text-[#888] mt-1">6 templates in your library</p>
+          <p className="text-sm text-[#888] mt-1">{templates.length} templates in your library</p>
         </div>
-        <Button className="gap-2 bg-primary hover:bg-primary/90 text-white">
+        <Button onClick={handleNew} className="gap-2 bg-primary hover:bg-primary/90 text-white">
           <Plus className="w-4 h-4" />
           New Template
         </Button>
@@ -125,7 +131,7 @@ export function TemplatesPanel() {
 
         {categories.map((cat) => (
           <TabsContent key={cat} value={cat} className="space-y-3 mt-6">
-            {emailTemplates
+            {templates
               .filter((template) => cat === 'all' || template.category === cat)
               .map((template) => (
                 <Card
@@ -149,7 +155,7 @@ export function TemplatesPanel() {
                       <div className="flex items-center justify-between pt-3 border-t border-white/5 mt-3">
                         <div className="flex items-center gap-4 text-xs text-[#888]">
                           <span>📊 Used {template.usageCount}x</span>
-                          <span>Last: {template.lastUsed}</span>
+                          <span>Last: {template.lastUsed || 'Never'}</span>
                           <span className="text-success font-semibold">
                             ✓ {template.successRate}% success rate
                           </span>
@@ -158,6 +164,7 @@ export function TemplatesPanel() {
                         <div className="flex gap-2">
                           <Button
                             size="sm"
+                            onClick={() => handleUse(template)}
                             className="gap-1 bg-white/10 hover:bg-white/20 text-[#a3a3a3] border border-white/20"
                           >
                             <Copy className="w-3 h-3" />
@@ -165,6 +172,15 @@ export function TemplatesPanel() {
                           </Button>
                           <Button
                             size="sm"
+                            onClick={() => copyTemplate(template.preview)}
+                            className="gap-1 bg-white/10 hover:bg-white/20 text-[#a3a3a3] border border-white/20"
+                          >
+                            <Copy className="w-3 h-3" />
+                            {libraryCopied ? '✓ Copied!' : 'Copy'}
+                          </Button>
+                          <Button
+                            size="sm"
+                            onClick={() => handleEdit(template)}
                             className="gap-1 bg-white/10 hover:bg-white/20 text-[#a3a3a3] border border-white/20"
                           >
                             <Edit className="w-3 h-3" />
@@ -172,6 +188,7 @@ export function TemplatesPanel() {
                           </Button>
                           <Button
                             size="sm"
+                            onClick={() => deleteTemplate(template.id)}
                             className="gap-1 bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/20"
                           >
                             <Trash2 className="w-3 h-3" />
@@ -186,24 +203,98 @@ export function TemplatesPanel() {
         ))}
       </Tabs>
 
+      {/* Basic Edit Modal */}
+      {editModalOpen && editingTemplate && (
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+          <div className="bg-[#1a1a2e] border border-white/10 rounded-xl p-6 max-w-lg w-full space-y-4 shadow-2xl animate-in fade-in zoom-in duration-200">
+            <div className="flex items-center justify-between border-b border-white/5 pb-4 mb-4">
+              <h3 className="text-lg font-bold text-white">{editingTemplate.id ? 'Edit Template' : 'New Template'}</h3>
+              <Button variant="ghost" size="icon" onClick={() => setEditModalOpen(false)} className="text-[#888] hover:text-white">
+                <X className="w-4 h-4" />
+              </Button>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="text-xs font-semibold text-[#a3a3a3] uppercase tracking-wider mb-1 block">Name</label>
+                <input 
+                  className="w-full bg-white/5 border border-white/10 rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-primary/50"
+                  placeholder="Template Name"
+                  value={editingTemplate.name}
+                  onChange={e => setEditingTemplate({...editingTemplate, name: e.target.value})}
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-[#a3a3a3] uppercase tracking-wider mb-1 block">Category</label>
+                <select 
+                  className="w-full bg-[#1a1a2e] border border-white/10 rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-primary/50"
+                  value={editingTemplate.category}
+                  onChange={e => setEditingTemplate({...editingTemplate, category: e.target.value as any})}
+                >
+                  <option value="follow-up">Follow-up</option>
+                  <option value="outreach">Outreach</option>
+                  <option value="closing">Closing</option>
+                  <option value="general">General</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-[#a3a3a3] uppercase tracking-wider mb-1 block">Subject</label>
+                <input 
+                  className="w-full bg-white/5 border border-white/10 rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-primary/50"
+                  placeholder="Email Subject"
+                  value={editingTemplate.subject}
+                  onChange={e => setEditingTemplate({...editingTemplate, subject: e.target.value})}
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-[#a3a3a3] uppercase tracking-wider mb-1 block">Content</label>
+                <textarea 
+                  className="w-full bg-white/5 border border-white/10 rounded px-3 py-2 text-sm text-white min-h-[150px] focus:outline-none focus:border-primary/50 resize-none"
+                  placeholder="Hi [Name], ..."
+                  value={editingTemplate.preview}
+                  onChange={e => setEditingTemplate({...editingTemplate, preview: e.target.value})}
+                />
+              </div>
+            </div>
+            <div className="flex gap-2 pt-4">
+              <Button onClick={handleSave} className="flex-1 bg-primary hover:bg-primary/90 text-white font-semibold">Save Template</Button>
+              <Button onClick={() => setEditModalOpen(false)} className="flex-1 bg-white/5 hover:bg-white/10 text-white border border-white/10">Cancel</Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <GeneratedContentModal 
+        isOpen={modalOpen}
+        onClose={() => setModalOpen(false)}
+        title={modalTitle}
+        content={modalContent}
+        isLoading={isGenerating}
+      />
+
       <Card className="glass rounded-xl p-6 border border-white/10 bg-white/[0.01]">
         <h4 className="text-sm font-semibold text-white mb-4">Template Performance</h4>
         <div className="grid grid-cols-4 gap-4">
           <div className="text-center">
-            <div className="text-2xl font-bold text-primary">6</div>
+            <div className="text-2xl font-bold text-primary">{templates.length}</div>
             <p className="text-xs text-[#888] mt-2">Total Templates</p>
           </div>
           <div className="text-center">
-            <div className="text-2xl font-bold text-success">109</div>
+            <div className="text-2xl font-bold text-success">
+              {templates.reduce((acc, t) => acc + (t.usageCount || 0), 0)}
+            </div>
             <p className="text-xs text-[#888] mt-2">Total Uses</p>
           </div>
           <div className="text-center">
-            <div className="text-2xl font-bold text-warning">72%</div>
+            <div className="text-2xl font-bold text-warning">
+              {templates.length > 0 ? Math.round(templates.reduce((acc, t) => acc + (t.successRate || 0), 0) / templates.length) : 0}%
+            </div>
             <p className="text-xs text-[#888] mt-2">Avg Success Rate</p>
           </div>
           <div className="text-center">
-            <div className="text-2xl font-bold text-secondary">3</div>
-            <p className="text-xs text-[#888] mt-2">Most Used</p>
+            <div className="text-2xl font-bold text-secondary">
+              {templates.length > 0 ? templates.reduce((max, t) => t.usageCount > max.usageCount ? t : max, templates[0]).name.split(' ')[0] : '-'}
+            </div>
+            <p className="text-xs text-[#888] mt-2">Top Performer</p>
           </div>
         </div>
       </Card>

@@ -1,7 +1,12 @@
 'use client';
 
-import { useState } from 'react';
-import { TrendingUp, Users, Calendar, Zap } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { TrendingUp, Users, Calendar, Zap, Loader2, Copy, X } from 'lucide-react';
+import { useAccount } from '@/context/account-context';
+import { fetchCompleteData, normalizeOpportunities, fetchEmail, fetchStrategy } from '@/lib/api';
+import { getDealColor, getStageBorderColor } from '@/lib/deal-colors';
+import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard';
+import { GeneratedContentModal } from '../email/generated-content-modal';
 
 interface Deal {
   id: string;
@@ -16,78 +21,136 @@ interface Deal {
 }
 
 export function DealCards() {
-  const [actionFeedback, setActionFeedback] = useState<Record<string, string>>({});
+  const { selectedAccountId } = useAccount();
+  const [deals, setDeals] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const { copied, copy } = useCopyToClipboard();
 
-  const deals: Deal[] = [
-    {
-      id: '1',
-      name: 'Enterprise License',
-      company: 'Acme Corporation',
-      value: 150000,
-      stage: 'Proposal',
-      probability: 85,
-      daysLeft: 8,
-      status: 'healthy',
-      contact: 'John Smith',
-    },
-    {
-      id: '2',
-      name: 'Integration Services',
-      company: 'TechFlow Inc',
-      value: 200000,
-      stage: 'Negotiation',
-      probability: 72,
-      daysLeft: 2,
-      status: 'moderate',
-      contact: 'Sarah Johnson',
-    },
-    {
-      id: '3',
-      name: 'Support Package',
-      company: 'DataSync Ltd',
-      value: 85000,
-      stage: 'Contract Review',
-      probability: 45,
-      daysLeft: 15,
-      status: 'risk',
-      contact: 'Mike Chen',
-    },
-  ];
+  // AI Functionality State
+  const [modalOpen, setModalOpen] = useState(false);
+  const [modalContent, setModalContent] = useState('');
+  const [modalTitle, setModalTitle] = useState('');
+  const [isEngaging, setIsEngaging] = useState(false);
+  
+  const [showTips, setShowTips] = useState<Record<string, boolean>>({});
+  const [tips, setTips] = useState<Record<string, string>>({});
+  const [loadingTips, setLoadingTips] = useState<Record<string, boolean>>({});
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'healthy':
-        return { bg: 'bg-success/10', border: 'border-success/30', text: 'text-success' };
-      case 'moderate':
-        return { bg: 'bg-warning/10', border: 'border-warning/30', text: 'text-warning' };
-      case 'risk':
-        return { bg: 'bg-destructive/10', border: 'border-destructive/30', text: 'text-destructive' };
-      default:
-        return { bg: 'bg-primary/10', border: 'border-primary/30', text: 'text-primary' };
+  useEffect(() => {
+    if (!selectedAccountId) return;
+    setLoading(true);
+    fetchCompleteData(selectedAccountId).then(data => {
+      if (data) {
+        setDeals(normalizeOpportunities(data).slice(0, 5));
+      }
+      setLoading(false);
+    });
+  }, [selectedAccountId]);
+
+  const daysColor = (days: number) => {
+    if (days <= 2) return '#ef4444';   // red — critical
+    if (days <= 5) return '#f97316';   // orange — urgent
+    if (days <= 10) return '#f59e0b';  // amber — warning
+    return '#22c55e';                  // green — healthy
+  };
+
+  const handleEngage = async (deal: any) => {
+    setModalTitle(`Engagement Plan — ${deal.name}`);
+    setModalContent('');
+    setIsEngaging(true);
+    setModalOpen(true);
+
+    try {
+      const res = await fetchEmail({
+        accountId: deal.accountId,
+        accountName: deal.accountName,
+        contactName: deal.contact || 'Customer',
+        tone: "Formal",
+        type: "engage",
+        emailType: "deal_engagement",
+        dealStage: deal.dealStage,
+        dealValue: deal.dealValue,
+        daysLeft: deal.daysLeft || 7,
+        probability: deal.winProbability,
+        context: `Generate a deal engagement action plan for ${deal.name} with ${deal.accountName}.
+          Current stage: ${deal.dealStage}.
+          Deal value: ${deal.dealValue}.
+          Probability: ${deal.winProbability}%.
+          Days remaining: ${deal.daysLeft || 7} days.
+          Primary contact: ${deal.contact || 'Customer'}.
+          
+          Provide:
+          1. A personalized outreach email to ${deal.contact || 'Customer'} appropriate for the ${deal.dealStage} stage
+          2. Three specific next actions the sales rep should take in the next 48 hours
+          3. Key objections likely at this stage and how to handle them
+          4. Suggested meeting agenda if a call is needed
+          
+          Make all advice specific to the ${deal.dealStage} stage and ${deal.winProbability}% probability context.`
+      }, selectedAccountId);
+
+      const generated = res?.email?.body || res?.content || res?.result || (typeof res === 'string' ? res : JSON.stringify(res));
+      setModalContent(generated || 'Failed to generate plan.');
+    } catch (err) {
+      setModalContent('Error generating engagement plan. Please try again.');
+    } finally {
+      setIsEngaging(false);
     }
   };
 
-  const getStageColor = (stage: string) => {
-    switch (stage) {
-      case 'Proposal':
-        return 'text-secondary';
-      case 'Negotiation':
-        return 'text-accent';
-      case 'Contract Review':
-        return 'text-warning';
-      default:
-        return 'text-primary';
+  const handleAITips = async (deal: any) => {
+    if (showTips[deal.id]) {
+      setShowTips(prev => ({ ...prev, [deal.id]: false }));
+      return;
+    }
+
+    setShowTips(prev => ({ ...prev, [deal.id]: true }));
+    if (tips[deal.id]) return;
+
+    setLoadingTips(prev => ({ ...prev, [deal.id]: true }));
+    try {
+      const stageContexts: Record<string, string> = {
+        'Proposal': `The deal "${deal.name}" with ${deal.accountName} is in Proposal stage at ${deal.winProbability}% probability. Generate 4 tactical AI tips...`,
+        'Negotiation': `The deal "${deal.name}" with ${deal.accountName} is in Negotiation stage at ${deal.winProbability}% probability. Generate 4 tactical AI tips...`,
+        'Prospecting': `The deal "${deal.name}" with ${deal.accountName} is in early Prospecting stage at ${deal.winProbability}%. Generate 4 qualification tips...`,
+        'Qualification': `The deal "${deal.name}" with ${deal.accountName} is in Qualification stage at ${deal.winProbability}%. Generate BANT tips...`,
+        'default': `The deal "${deal.name}" with ${deal.accountName} is in ${deal.dealStage} stage at ${deal.winProbability}%. Generate tactical tips...`
+      };
+
+      const context = stageContexts[deal.dealStage] || stageContexts['default'];
+
+      const res = await fetchStrategy({
+        accountId: deal.accountId,
+        context: context
+      }, selectedAccountId);
+
+      const tipsText = res?.strategy || res?.content || res?.result || (typeof res === 'string' ? res : JSON.stringify(res));
+      setTips(prev => ({ ...prev, [deal.id]: tipsText || 'No tips available.' }));
+    } catch (err) {
+      setTips(prev => ({ ...prev, [deal.id]: 'Failed to load tips.' }));
+    } finally {
+      setLoadingTips(prev => ({ ...prev, [deal.id]: false }));
     }
   };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center p-12 glass rounded-lg border border-white/10">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   return (
     <div className="grid grid-cols-1 gap-4">
       {deals.map((deal, idx) => {
-        const colors = getStatusColor(deal.status);
+        const dealStyle = getDealColor(deal.winProbability);
+        const stageColor = getStageBorderColor(deal.dealStage);
+        const daysLeft = deal.daysLeft || Math.floor(Math.random() * 14) + 1;
+        
         return (
           <div
             key={deal.id}
-            className={`glass rounded-lg p-5 border ${colors.border} hover:border-opacity-50 transition-all duration-300 group cursor-pointer animate-slide-in`}
+            className={`glass rounded-lg p-5 border border-white/10 hover:border-white/20 transition-all duration-300 group cursor-pointer animate-slide-in`}
             style={{ animationDelay: `${idx * 0.1}s` }}
           >
             {/* Header */}
@@ -96,37 +159,48 @@ export function DealCards() {
                 <h3 className="text-sm font-semibold text-foreground group-hover:text-gradient-primary transition-all">
                   {deal.name}
                 </h3>
-                <p className="text-xs text-muted-foreground mt-0.5">{deal.company}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">{deal.accountName}</p>
               </div>
-              <div className={`px-2 py-1 rounded-full text-xs font-bold ${colors.bg} ${colors.text}`}>
-                {deal.probability}%
+              <div 
+                className={`px-2 py-1 rounded-full text-xs font-bold`}
+                style={{ color: dealStyle.dot, backgroundColor: `${dealStyle.dot}15` }}
+              >
+                {deal.winProbability}%
               </div>
             </div>
 
             {/* Details Grid */}
             <div className="grid grid-cols-4 gap-3 mb-4">
-              {/* Value */}
               <div className="p-2.5 rounded-lg bg-white/5 border border-white/10">
                 <p className="text-xs text-muted-foreground mb-1">Value</p>
-                <p className="text-sm font-bold text-gradient-primary">${(deal.value / 1000).toFixed(0)}K</p>
+                <p className="text-sm font-bold text-gradient-primary">${(deal.dealValue / 1000).toFixed(0)}K</p>
               </div>
 
-              {/* Stage */}
               <div className="p-2.5 rounded-lg bg-white/5 border border-white/10">
                 <p className="text-xs text-muted-foreground mb-1">Stage</p>
-                <p className={`text-sm font-bold ${getStageColor(deal.stage)}`}>{deal.stage}</p>
+                <div className="flex">
+                  <span style={{
+                    backgroundColor: stageColor + '22',
+                    color: stageColor,
+                    border: `1px solid ${stageColor}`,
+                    borderRadius: '4px',
+                    padding: '1px 6px',
+                    fontSize: '10px',
+                    fontWeight: '700'
+                  }}>
+                    {deal.dealStage}
+                  </span>
+                </div>
               </div>
 
-              {/* Days Left */}
               <div className="p-2.5 rounded-lg bg-white/5 border border-white/10">
-                <p className="text-xs text-muted-foreground mb-1">Days Left</p>
-                <p className="text-sm font-bold text-accent">{deal.daysLeft}d</p>
+                <p className="text-xs text-muted-foreground mb-1">Due In</p>
+                <p className="text-sm font-bold" style={{ color: daysColor(daysLeft) }}>{daysLeft}d</p>
               </div>
 
-              {/* Contact */}
               <div className="p-2.5 rounded-lg bg-white/5 border border-white/10">
                 <p className="text-xs text-muted-foreground mb-1">Contact</p>
-                <p className="text-sm font-bold text-secondary truncate">{deal.contact}</p>
+                <p className="text-sm font-bold text-secondary truncate">{deal.contact || 'Main Contact'}</p>
               </div>
             </div>
 
@@ -134,18 +208,16 @@ export function DealCards() {
             <div className="space-y-2">
               <div className="flex items-center justify-between text-xs">
                 <span className="text-muted-foreground">Probability</span>
-                <span className={colors.text}>{deal.probability}%</span>
+                <span style={{ color: dealStyle.dot }}>{deal.winProbability}%</span>
               </div>
               <div className="w-full h-1.5 bg-white/10 rounded-full overflow-hidden">
                 <div
-                  className={`h-full rounded-full transition-all duration-300 ${
-                    deal.probability > 75
-                      ? 'bg-gradient-to-r from-success to-primary'
-                      : deal.probability > 50
-                        ? 'bg-gradient-to-r from-warning to-accent'
-                        : 'bg-gradient-to-r from-destructive to-warning'
-                  }`}
-                  style={{ width: `${deal.probability}%` }}
+                  className="h-full rounded-full transition-all duration-300"
+                  style={{ 
+                    width: `${deal.winProbability}%`,
+                    backgroundColor: dealStyle.dot,
+                    boxShadow: `0 0 8px ${dealStyle.glow}`
+                  }}
                 />
               </div>
             </div>
@@ -154,38 +226,64 @@ export function DealCards() {
             <div className="mt-4 pt-4 border-t border-white/10 flex items-center gap-2">
               <button
                 type="button"
-                onClick={() =>
-                  setActionFeedback((prev) => ({
-                    ...prev,
-                    [deal.id]: `Engagement task created for ${deal.contact}`,
-                  }))
-                }
-                className="flex-1 flex items-center justify-center gap-2 px-3 py-2 text-xs font-medium rounded-lg bg-white/8 border border-white/15 hover:bg-white/12 hover:border-white/25 text-[#c7cfda] transition-colors"
+                disabled={isEngaging}
+                onClick={() => handleEngage(deal)}
+                className="flex-1 flex items-center justify-center gap-2 px-3 py-2 text-xs font-medium rounded-lg bg-white/8 border border-white/15 hover:bg-white/12 hover:border-white/25 text-[#c7cfda] transition-colors disabled:opacity-50"
               >
                 <Users className="w-3 h-3" />
-                <span>Engage</span>
+                <span>{isEngaging ? '⟳ Generating...' : '👤 Engage'}</span>
               </button>
               <button
                 type="button"
-                onClick={() =>
-                  setActionFeedback((prev) => ({
-                    ...prev,
-                    [deal.id]: `AI tip generated for ${deal.company}`,
-                  }))
-                }
+                onClick={() => handleAITips(deal)}
                 className="flex-1 flex items-center justify-center gap-2 px-3 py-2 text-xs font-medium rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 hover:border-white/20 text-[#b6aeca] transition-colors"
+                style={{ color: showTips[deal.id] ? '#a78bfa' : '' }}
               >
                 <Zap className="w-3 h-3" />
-                <span>AI Tips</span>
+                <span>{loadingTips[deal.id] ? '⟳ Loading...' : showTips[deal.id] ? '✦ Hide Tips' : '✦ AI Tips'}</span>
               </button>
             </div>
 
-            {actionFeedback[deal.id] && (
-              <p className="mt-2 text-[11px] text-[#9a9a9a]">{actionFeedback[deal.id]}</p>
+            {/* Inline AI Tips Panel */}
+            {showTips[deal.id] && (
+              <div className="mt-4 animate-accordion-down overflow-hidden">
+                {loadingTips[deal.id] ? (
+                  <p className="text-xs text-muted-foreground py-2 italic text-center">⟳ Generating tactical advice for {deal.name}...</p>
+                ) : (
+                  <div className="border-t border-white/5 pt-4 mt-2">
+                    <p className="text-[10px] uppercase tracking-wider font-bold text-accent mb-2">✦ AI Strategy Guidance — {deal.dealStage} Stage</p>
+                    <p className="text-xs text-[#d1d5db] leading-relaxed whitespace-pre-wrap bg-white/5 p-3 rounded-lg border border-white/5">
+                      {tips[deal.id]}
+                    </p>
+                    <div className="flex gap-2 mt-3">
+                      <button 
+                        onClick={() => copy(tips[deal.id])}
+                        className="text-[10px] font-bold uppercase tracking-tight px-3 py-1.5 rounded bg-white/5 border border-white/10 hover:bg-white/10 text-white transition-all"
+                      >
+                        {copied ? '✓ Copied!' : 'Copy Tactical Tips'}
+                      </button>
+                      <button 
+                        onClick={() => setShowTips(prev => ({ ...prev, [deal.id]: false }))}
+                        className="text-[10px] font-bold uppercase tracking-tight px-3 py-1.5 rounded bg-white/5 border border-white/10 hover:bg-white/10 text-[#888] hover:text-white transition-all"
+                      >
+                        Dismiss
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
             )}
           </div>
         );
       })}
+
+      <GeneratedContentModal 
+        isOpen={modalOpen}
+        onClose={() => setModalOpen(false)}
+        title={modalTitle}
+        content={modalContent}
+        isLoading={isEngaging}
+      />
     </div>
   );
 }
