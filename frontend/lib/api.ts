@@ -1,4 +1,4 @@
-const PROXY_BASE = process.env.NEXT_PUBLIC_PROXY_URL || process.env.REACT_APP_SF_PROXY_URL || 'http://localhost:3001';
+const PROXY_BASE = process.env.NEXT_PUBLIC_PROXY_URL || process.env.REACT_APP_SF_PROXY_URL || '';
 const STORAGE_KEY = 'salespulse_uploaded_data';
 
 export const API_URL = `${PROXY_BASE}/api`;

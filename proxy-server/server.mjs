@@ -26,8 +26,8 @@ if (!process.env.SF_ACCESS_TOKEN) {
 }
 
 // Salesforce Configuration
-const ACCESS_TOKEN = process.env.SF_ACCESS_TOKEN;
-const INSTANCE_URL = process.env.REACT_APP_SF_ORG_URL;
+const ACCESS_TOKEN = process.env.SALESFORCE_TOKEN || process.env.SF_ACCESS_TOKEN;
+const INSTANCE_URL = process.env.INSTANCE_URL || process.env.REACT_APP_SF_ORG_URL;
 const APEX_BASE_URL = `${INSTANCE_URL}/services/apexrest/salesforge`;
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:3000';
 

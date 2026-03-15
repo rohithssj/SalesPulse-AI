@@ -89,8 +89,7 @@ export function SettingsContent() {
   const testSalesforceConnection = async () => {
     setConnectionStatus('testing');
     try {
-      const proxyUrl = process.env.REACT_APP_SF_PROXY_URL || 'http://localhost:3001';
-      const res = await fetch(`${proxyUrl}/api/accounts`);
+      const res = await fetch('/api/accounts');
       if (res.ok) {
         setConnectionStatus('connected');
         updateSetting('salesforceConnected', true);
@@ -121,9 +120,8 @@ export function SettingsContent() {
     setIsSyncing(true);
     setSyncResult(null);
     try {
-      const proxyUrl = process.env.REACT_APP_SF_PROXY_URL || 'http://localhost:3001';
       const res = await fetch(
-        `${proxyUrl}/api/completeData?accountId=${selectedAccountId}`
+        `/api/completeData?accountId=${selectedAccountId}`
       );
       if (!res.ok) throw new Error('Sync failed');
       const data = await res.json();
