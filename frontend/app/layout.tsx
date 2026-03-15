@@ -1,5 +1,5 @@
 import type { Metadata } from 'next'
-import { Geist, Geist_Mono } from 'next/font/google'
+import { Inter } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
 import { Sidebar } from '@/components/layout/sidebar'
 import { NotificationCenter } from '@/components/layout/notification-center-enhanced'
@@ -7,8 +7,7 @@ import { AccountProvider } from '@/context/account-context'
 import { DataSourceProvider } from '@/context/DataSourceContext'
 import './globals.css'
 
-const _geist = Geist({ subsets: ["latin"] });
-const _geistMono = Geist_Mono({ subsets: ["latin"] });
+const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
   title: 'SalesPulse — AI Sales Command Center',
@@ -25,7 +24,7 @@ export default function RootLayout({
       <head>
         <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" async></script>
       </head>
-      <body className="font-sans antialiased bg-background text-foreground min-h-screen">
+      <body className={`${inter.className} antialiased bg-background text-foreground min-h-screen`}>
         <DataSourceProvider>
           <AccountProvider>
             <Sidebar />

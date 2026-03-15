@@ -1,3 +1,9 @@
+# Vercel and dependencies
+.vercel
+node_modules
+.env
+.env.local
+
 # Node and dependency folders
 node_modules/
 frontend/node_modules/
