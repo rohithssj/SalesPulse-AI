@@ -1,163 +1,362 @@
 // lib/aiGenerator.ts
-// Single function that handles AI generation for BOTH Salesforce and Upload mode
-// Upload mode → sends only context text, no accountId
-// Salesforce mode → sends real accountId
+'use client';
 
-import { apiPost, isValidSalesforceId } from './api';
 import { parseAIResponse } from './api';
 
-export type GenerationType =
-  | 'email'
-  | 'followup'
-  | 'proposal'
-  | 'meetingPrep'
-  | 'strategy'
-  | 'engage'
-  | 'reengagement'
-  | 'pricing'
-  | 'callprep';
+const PROXY_BASE = process.env.NEXT_PUBLIC_PROXY_URL || 'http://localhost:3001';
+const STORAGE_KEY = 'salespulse_uploaded_data';
 
-interface GenerateParams {
-  type: GenerationType;
-  accountId?: string;
-  accountName?: string;
-  contactName?: string;
-  contactRole?: string;
-  dealName?: string;
-  stage?: string;
-  value?: string | number;
-  probability?: number;
-  daysLeft?: number;
-  signals?: string[];
-  industry?: string;
-  tone?: string;
-  context?: string; // override — use this exact context if provided
-}
-
-// Map generation type to endpoint
-const ENDPOINT_MAP: Record<GenerationType, string> = {
-  email:       '/email',
-  followup:    '/email',
-  reengagement:'/email',
-  pricing:     '/email',
-  engage:      '/email',
-  callprep:    '/meetingPrep',
-  meetingPrep: '/meetingPrep',
-  proposal:    '/proposal',
-  strategy:    '/strategy',
+// ── Detect upload mode ──
+const isUploadMode = (): boolean => {
+  if (typeof window === 'undefined') return false;
+  try {
+    return localStorage.getItem(STORAGE_KEY) !== null;
+  } catch {
+    return false;
+  }
 };
 
-export const generateAIContent = async (
+// ── Validate Salesforce ID ──
+const isValidSalesforceId = (id?: string): boolean => {
+  if (!id) return false;
+  // Standard Salesforce ID is 15 or 18 alphanumeric characters
+  return /^[a-zA-Z0-9]{15,18}$/.test(id.trim());
+};
+
+export type GenerationType =
+  | 'email' | 'followup' | 'proposal' | 'meetingPrep'
+  | 'strategy' | 'engage' | 'reengagement' | 'pricing' | 'callprep';
+
+export interface GenerateParams {
+  type:          GenerationType;
+  accountId?:    string;
+  accountName?:  string;
+  contactName?:  string;
+  contactRole?:  string;
+  dealName?:     string;
+  stage?:        string;
+  value?:        string | number;
+  probability?:  number;
+  daysLeft?:     number;
+  signals?:      string[];
+  industry?:     string;
+  tone?:         string;
+  context?:      string;
+}
+
+// ── UPLOAD MODE: call /generate — never touches Salesforce ──
+const generateViaContext = async (
+  context: string
+): Promise<string> => {
+  try {
+    const res = await fetch(`${PROXY_BASE}/generate`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ context, maxTokens: 1000 }),
+    });
+    if (!res.ok) {
+      console.warn('Generate endpoint failed:', res.status);
+      return '';
+    }
+    const data = await res.json();
+    return data.result || '';
+  } catch (err) {
+    console.warn('Generate endpoint error:', err);
+    return '';
+  }
+};
+
+// ── SALESFORCE MODE: call SF endpoints with real accountId ──
+const generateViaSalesforce = async (
   params: GenerateParams
 ): Promise<string> => {
-
   const {
-    type, accountId, accountName = 'Account',
-    contactName = 'Contact', contactRole = '',
-    dealName = '', stage = 'Qualification',
-    value = '$0', probability = 65,
-    daysLeft = 30, signals = [],
-    industry = 'Technology', tone = 'Formal',
+    type, accountId, accountName, contactName,
+    contactRole, dealName, stage, value,
+    probability, daysLeft, signals, industry, tone,
     context,
   } = params;
 
-  const endpoint = ENDPOINT_MAP[type];
-  const safeId   = accountId && isValidSalesforceId(accountId)
-    ? accountId
-    : null; // Upload mode IDs get nulled out
-
-  // Build rich context if none provided
-  const richContext = context || buildContext(params);
-
-  // Build request body
-  // CRITICAL: if safeId is null (upload mode), send 'upload_mode' as accountId
-  // so Salesforce doesn't try to look up ACC001
-  // The real intelligence comes from the context string
-  const body: Record<string, unknown> = {
-    accountId:   safeId || 'upload_mode',
-    accountName,
-    contactName,
-    tone,
-    type,
-    context:     richContext,
-    // Flag so backend knows this is context-only, not a CRM lookup
-    dataSource:  safeId ? 'salesforce' : 'uploaded_file',
+  const endpointMap: Record<GenerationType, string> = {
+    email:       '/email',
+    followup:    '/email',
+    reengagement:'/email',
+    pricing:     '/email',
+    engage:      '/email',
+    callprep:    '/meetingPrep',
+    meetingPrep: '/meetingPrep',
+    proposal:    '/proposal',
+    strategy:    '/strategy',
   };
 
-  // Only add these if we have a real Salesforce ID
-  if (safeId) {
-    body.dealStage   = stage;
-    body.dealValue   = value;
-    body.probability = probability;
-  }
+  const endpoint = endpointMap[type];
 
-  const data = await apiPost(endpoint, body);
-  return parseAIResponse(data) || generateFallbackContent(params);
+  try {
+    const res = await fetch(`${PROXY_BASE}/api${endpoint}`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({
+        accountId,
+        accountName,
+        contactName,
+        contactRole,
+        dealName,
+        dealStage:   stage,
+        dealValue:   value,
+        probability,
+        daysLeft,
+        tone:        tone || 'Formal',
+        type,
+        context:     context || buildContext(params),
+      }),
+    });
+
+    if (!res.ok) {
+      const errText = await res.text().catch(() => '');
+      console.error(`SF API Error on ${endpoint}:`, res.status, errText);
+      return '';
+    }
+
+    const data = await res.json();
+    return parseAIResponse(data) || '';
+  } catch (err) {
+    console.error('SF API network error:', err);
+    return '';
+  }
 };
 
-// Fallback content when API fails — never show empty or raw JSON
-const generateFallbackContent = (params: GenerateParams): string => {
+// ── MAIN EXPORT ──
+export const generateAIContent = async (
+  params: GenerateParams
+): Promise<string> => {
+  const { accountId, type } = params;
+  const uploadModeActive = isUploadMode();
+  const hasSFId    = isValidSalesforceId(accountId);
+
+  let result = '';
+
+  if (uploadModeActive || !hasSFId) {
+    // UPLOAD MODE or invalid SF ID:
+    // Build context and call /generate directly (Isolates from Salesforce)
+    const context = params.context || buildContext(params);
+    console.log(`[Upload Mode] Generating ${type} via /generate isolation layer`);
+    result = await generateViaContext(context);
+  } else {
+    // SALESFORCE MODE: real SF ID — call SF endpoint
+    console.log(`[SF Mode] Generating ${type} via Salesforce for ${accountId}`);
+    result = await generateViaSalesforce(params);
+  }
+
+  // If both paths failed — return professional fallback
+  if (!result || result.trim() === '') {
+    console.warn(`[aiGenerator] Generation failed for ${type} — using fallback`);
+    return buildFallback(params);
+  }
+
+  return result;
+};
+
+// ── Context builder ──
+const buildContext = (params: GenerateParams): string => {
   const {
-    type, accountName, contactName, stage,
-    value, probability = 65, daysLeft = 30, signals = []
+    type, accountName = 'Account', contactName = 'Contact',
+    contactRole = '', dealName = '', stage = 'Qualification',
+    value = '$0', probability = 65, daysLeft = 30,
+    signals = [], industry = 'Technology', tone = 'Formal',
   } = params;
 
   const signalText = signals.length > 0
-    ? signals.slice(0, 2).join(', ')
-    : 'recent engagement';
+    ? signals.slice(0, 3).join(', ')
+    : 'recent engagement activity';
 
-  switch (type) {
-    case 'followup':
-    case 'email':
-      return `Subject: Following up — ${accountName}\n\nHi ${contactName},\n\nI wanted to reach out following our recent discussions about your needs at ${accountName}. Based on the ${signalText} we've observed, I believe now is a great time to reconnect.\n\nWould you have 15 minutes this week to discuss how we can help you move forward?\n\nBest regards,\nYour Account Executive`;
-
-    case 'proposal':
-      return `SALES PROPOSAL — ${accountName}\n\nEXECUTIVE SUMMARY\nWe propose a customized solution for ${accountName} valued at ${value}.\n\nSOLUTION OVERVIEW\nBased on your requirements, our platform addresses your key challenges in ${params.industry || 'your industry'}.\n\nPROPOSED VALUE\n• Streamlined operations\n• Measurable ROI within 90 days\n• Dedicated implementation support\n\nNEXT STEPS\nSchedule a 30-minute review call to finalize terms.\n\nExpected close: ${daysLeft} days`;
-
-    case 'meetingPrep':
-    case 'callprep':
-      return `CALL PREPARATION — ${contactName} at ${accountName}\n\nOBJECTIVE\nAdvance the deal from ${stage} stage toward close.\n\nOPENING\n"Hi ${contactName}, thanks for your time. I wanted to discuss where we are and ensure everything is on track from your side."\n\nKEY TALKING POINTS\n1. Reinforce value specific to ${accountName}'s goals\n2. Address any blockers since our last conversation\n3. Confirm timeline — ${daysLeft} days to target close\n\nQUESTIONS TO ASK\n1. What would need to be true to move forward this month?\n2. Are there any internal approvals still pending?\n3. How are you feeling about the proposed solution?\n\nCLOSING\n"What's the best next step from your side to keep momentum going?"`;
-
-    case 'strategy':
-    case 'engage':
-      return `ENGAGEMENT STRATEGY — ${accountName}\n\nSITUATION\nDeal at ${stage} stage. Win probability: ${probability}%. Days remaining: ${daysLeft}.\nKey signals: ${signalText}.\n\nPRIORITY ACTIONS (Next 48 Hours)\n1. Email ${contactName} with a specific value-add relevant to ${signalText}\n2. Schedule a ${stage === 'Negotiation' ? 'final review' : 'discovery'} call\n3. Prepare ${stage === 'Proposal' ? 'revised proposal' : 'tailored demo'}\n\nKEY RISKS\n• Deal going silent at ${stage} stage\n• Competitor engagement detected\n\nRECOMMENDED NEXT ACTION\n${probability > 70 ? 'Push for commitment — deal is ready to close.' : 'Build urgency and reinforce unique value proposition.'}`;
-
-    default:
-      return `AI content for ${accountName} — ${type}.\nContact: ${contactName} | Stage: ${stage} | Value: ${value}`;
-  }
-};
-
-// Context builder for each type
-const buildContext = (params: GenerateParams): string => {
-  const {
-    type, accountName, contactName, contactRole,
-    dealName, stage, value, probability,
-    daysLeft, signals, industry, tone
-  } = params;
-
-  const signalText = signals?.join(', ') || 'recent engagement';
-
-  const base = `
-ACCOUNT: ${accountName}
+  const dealContext = `
+ACCOUNT: ${accountName} | INDUSTRY: ${industry}
 CONTACT: ${contactName}${contactRole ? ` (${contactRole})` : ''}
-DEAL: ${dealName || accountName} | Stage: ${stage} | Value: ${value}
-PROBABILITY: ${probability}% | DAYS TO CLOSE: ${daysLeft}
-SIGNALS: ${signalText}
-INDUSTRY: ${industry}
+DEAL: ${dealName || accountName} | STAGE: ${stage}
+VALUE: ${value} | WIN PROBABILITY: ${probability}%
+DAYS TO CLOSE: ${daysLeft} | SIGNALS: ${signalText}
 TONE: ${tone}
 `.trim();
 
-  const instructions: Record<GenerationType, string> = {
-    followup: `${base}\n\nWrite a personalized follow-up email. Reference the signals specifically. End with one clear CTA. Max 4 short paragraphs. Start directly with greeting.`,
-    email: `${base}\n\nWrite a professional sales email appropriate for ${stage} stage. Personalize to ${accountName}. Start directly with greeting.`,
-    reengagement: `${base}\n\nWrite a re-engagement email. Lead with something NEW and valuable. Do NOT mention the silence. Max 3 paragraphs. Start directly with greeting.`,
-    pricing: `${base}\n\nWrite a pricing details email. Frame pricing as ROI for ${industry}. Include 2-3 tier options briefly. End with a scheduling CTA.`,
-    proposal: `${base}\n\nWrite a full sales proposal. Include: Executive Summary, Solution Overview, Key Benefits, ROI Projection, Implementation Timeline, Next Steps. Format with clear section headers.`,
-    meetingPrep: `${base}\n\nCreate a complete meeting prep guide. Include: Objective, Opening line, 3 Key Talking Points, 3 Discovery Questions, 2 Likely Objections with responses, Closing statement.`,
-    callprep: `${base}\n\nCreate a call preparation guide for ${contactName} (${contactRole}). Include opening, talking points, questions, objection handling, and closing. Plain text with section headers.`,
-    strategy: `${base}\n\nCreate a deal advancement strategy. Include: Situation Assessment, Priority Actions for next 48 hours, Key Risks, Recommended Next Action. Plain text with headers.`,
-    engage: `${base}\n\nCreate a complete engagement plan. Sections: 1) Outreach Email to ${contactName}, 2) Next 48 Hours Actions (3 specific), 3) Objection Handling (2 objections), 4) Meeting Agenda. Plain text with headers.`,
+  const instructions: Partial<Record<GenerationType, string>> = {
+    email:
+      `${dealContext}\n\nWrite a professional sales email for ${stage} stage. Personalize to ${accountName}. Start directly with the greeting. No JSON.`,
+    followup:
+      `${dealContext}\n\nWrite a follow-up email referencing the signals: ${signalText}. One clear CTA. Max 4 paragraphs. Start with greeting. No JSON.`,
+    reengagement:
+      `${dealContext}\n\nWrite a re-engagement email. Lead with something NEW and valuable. Do NOT mention silence. Max 3 paragraphs. Start with greeting. No JSON.`,
+    pricing:
+      `${dealContext}\n\nWrite a pricing email framing cost as ROI for ${industry}. Include 2-3 tier options. End with scheduling CTA. Start with greeting. No JSON.`,
+    proposal:
+      `${dealContext}\n\nWrite a complete sales proposal with sections: Executive Summary, Solution Overview, Key Benefits (3 bullets), ROI Projection, Timeline, Next Steps. Use plain text headers. No JSON.`,
+    meetingPrep:
+      `${dealContext}\n\nCreate a meeting prep guide with: Objective (1 sentence), Opening line, 3 Key Talking Points, 3 Discovery Questions, 2 Objections with responses, Closing statement. Plain text headers. No JSON.`,
+    callprep:
+      `${dealContext}\n\nCreate a call prep guide for ${contactName} (${contactRole}). Include: Call Objective, Exact Opening, 3 Talking Points for ${contactRole} level, 3 Questions, 2 Objections + responses, Closing line. Plain text. No JSON.`,
+    strategy:
+      `${dealContext}\n\nCreate a deal strategy with: Situation (2 sentences), Priority Actions next 48 hours (3 specific actions), Key Risks (2), Recommended Next Action (1 sentence). Plain text headers. No JSON.`,
+    engage:
+      `${dealContext}\n\nCreate an engagement plan with 4 sections:\n1. OUTREACH EMAIL — write complete email to ${contactName}\n2. NEXT 48 HOURS — 3 specific actions\n3. OBJECTION HANDLING — 2 objections + exact responses\n4. MEETING AGENDA — 30-min structure\nPlain text. No JSON.`,
   };
 
-  return instructions[type] || base;
+  return instructions[type] || `${dealContext}\n\nGenerate helpful sales content for ${type}. Plain text. No JSON.`;
+};
+
+// ── Fallback content (shown when both paths fail) ──
+const buildFallback = (params: GenerateParams): string => {
+  const {
+    type, accountName = 'Account', contactName = 'Contact',
+    stage = 'Qualification', value = '$0',
+    probability = 65, daysLeft = 30, signals = [],
+  } = params;
+
+  const signalText = signals.slice(0, 2).join(', ') || 'recent engagement';
+
+  const fallbacks: Partial<Record<GenerationType, string>> = {
+    email:
+`Subject: Following up — ${accountName}
+
+Hi ${contactName},
+
+I wanted to reach out following our recent discussions. Based on the ${signalText} we've observed from ${accountName}, I believe this is a great time to connect.
+
+Would you have 15 minutes this week to discuss next steps?
+
+Best regards,
+Your Account Executive`,
+
+    followup:
+`Subject: Quick follow-up — ${accountName}
+
+Hi ${contactName},
+
+Following up on our recent conversation. I noticed ${signalText} and wanted to make sure we keep momentum going.
+
+Are you available for a brief call this week? I have some ideas that could be valuable given where you are right now.
+
+Looking forward to connecting.
+
+Best regards,
+Your Account Executive`,
+
+    proposal:
+`SALES PROPOSAL — ${accountName}
+
+EXECUTIVE SUMMARY
+We propose a tailored solution for ${accountName} valued at ${value}.
+
+SOLUTION OVERVIEW
+Based on your requirements, our platform addresses your key challenges. Given your signals (${signalText}), we recommend starting with core implementation.
+
+KEY BENEFITS
+- Streamline operations with measurable ROI
+- Implementation support from day one
+- Scalable architecture for your growth
+
+ROI PROJECTION
+Expected payback period: 6-9 months based on similar ${stage} stage clients.
+
+NEXT STEPS
+Schedule a 30-minute review call to finalize terms.
+Target close: ${daysLeft} days`,
+
+    meetingPrep:
+`MEETING PREP — ${contactName} at ${accountName}
+
+OBJECTIVE
+Advance deal from ${stage} to next stage and confirm timeline.
+
+OPENING
+"Hi ${contactName}, thanks for your time. I wanted to make sure we're aligned on next steps and address anything on your end."
+
+KEY TALKING POINTS
+1. Reinforce value — reference ${signalText}
+2. Address any blockers since last conversation
+3. Confirm ${daysLeft}-day timeline is still achievable
+
+QUESTIONS TO ASK
+1. What would need to be true to move forward this month?
+2. Are there any internal approvals still pending?
+3. How are you feeling about the proposed solution?
+
+CLOSING
+"What's the best next step from your side to keep this moving?"`,
+
+    callprep:
+`CALL PREPARATION — ${contactName} at ${accountName}
+
+CALL OBJECTIVE
+Confirm commitment and remove final blockers for ${stage} stage deal.
+
+OPENING LINE
+"Hi ${contactName}, thanks for taking my call. I wanted to connect briefly about ${accountName} and make sure everything is on track from your side."
+
+KEY TALKING POINTS
+1. Deal value: ${value} — reinforce ROI specific to your goals
+2. Address the ${stage} stage blockers directly
+3. Create urgency: ${daysLeft} days to close
+
+QUESTIONS
+1. What concerns do you still have about moving forward?
+2. Who else needs to be involved in the final decision?
+3. What would make this a clear "yes" for you?
+
+OBJECTION HANDLING
+- "Price is too high" → "Let's talk about ROI — what's the cost of NOT solving this challenge?"
+- "Need more time" → "Understood — what's the specific milestone you're waiting on?"
+
+CLOSING
+"Can we agree on a specific next step before we hang up today?"`,
+
+    strategy:
+`DEAL STRATEGY — ${accountName}
+
+SITUATION
+Deal at ${stage} stage with ${probability}% win probability. ${daysLeft} days to close. Key signals: ${signalText}.
+
+PRIORITY ACTIONS — NEXT 48 HOURS
+1. Email ${contactName} with a specific value-add tied to ${signalText}
+2. Schedule ${probability > 70 ? 'closing call' : 'discovery call'} this week
+3. Prepare ${stage === 'Proposal' ? 'revised proposal addressing objections' : 'tailored demo for their use case'}
+
+KEY RISKS
+- Deal going silent — follow up within 24 hours if no response
+- ${probability < 60 ? 'Low probability — identify and address main blocker immediately' : 'Competitor activity — reinforce unique value'}
+
+RECOMMENDED NEXT ACTION
+${probability > 70 ? `Push for commitment — this deal is ready to close. Send a clear call-to-action today.` : `Build urgency by connecting your solution directly to ${signalText}.`}`,
+
+    engage:
+`ENGAGEMENT PLAN — ${accountName}
+
+OUTREACH EMAIL
+Subject: Moving forward — ${accountName}
+
+Hi ${contactName},
+
+I've been reviewing our discussions and wanted to share some specific ideas for ${accountName}. Given the ${signalText} we've seen, I think now is the right moment to take the next step.
+
+I'd love to schedule 20 minutes to walk you through a tailored approach. Are you available this week?
+
+Best regards,
+Your Account Executive
+
+NEXT 48 HOURS
+1. Send the outreach email above within 2 hours
+2. Connect with secondary stakeholder if ${contactName} doesn't respond by tomorrow
+3. Prepare a one-page summary doc specific to ${accountName}'s use case
+
+OBJECTION HANDLING
+- "Not the right time" → "Understood — can we at least agree on a specific date to revisit?"
+- "Budget constraints" → "Let's talk ROI — what budget would make this easy to approve?"
+
+MEETING AGENDA (30 min)
+0-5 min:   Quick wins recap and relationship building
+5-20 min:  Deep dive on their top challenge — listen, don't pitch
+20-28 min: Present tailored solution tied to their signals
+28-30 min: Agree on ONE specific next action with a date`,
+  };
+
+  return fallbacks[type]
+    || `AI content for ${accountName} — ${type}.\nContact: ${contactName} | Stage: ${stage} | Value: ${value}\n\nPlease try generating again.`;
 };

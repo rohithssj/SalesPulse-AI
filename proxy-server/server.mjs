@@ -16,12 +16,13 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 
 // Validate on startup — fail loudly if missing
-if (!process.env.REACT_APP_SF_ORG_URL) {
-  console.error('❌ REACT_APP_SF_ORG_URL is not set in .env — proxy will not work');
+// Validate on startup — fail loudly if missing
+if (!process.env.INSTANCE_URL && !process.env.REACT_APP_SF_ORG_URL) {
+  console.error('❌ INSTANCE_URL is not set in .env — proxy will not work');
   process.exit(1);
 }
-if (!process.env.SF_ACCESS_TOKEN) {
-  console.error('❌ SF_ACCESS_TOKEN is not set in .env — proxy will not work');
+if (!process.env.SALESFORCE_TOKEN && !process.env.SF_ACCESS_TOKEN) {
+  console.error('❌ SALESFORCE_TOKEN is not set in .env — proxy will not work');
   process.exit(1);
 }
 
@@ -30,6 +31,7 @@ const ACCESS_TOKEN = process.env.SALESFORCE_TOKEN || process.env.SF_ACCESS_TOKEN
 const INSTANCE_URL = process.env.INSTANCE_URL || process.env.REACT_APP_SF_ORG_URL;
 const APEX_BASE_URL = `${INSTANCE_URL}/services/apexrest/salesforge`;
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:3000';
+const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
 
 app.use(cors({ origin: FRONTEND_URL }));
 app.use(express.json());
@@ -52,6 +54,58 @@ async function ensureDefaultAccountId() {
     }
     return defaultAccountId;
 }
+
+// ── NEW: Context-only generation endpoint (upload mode) ──
+app.post('/generate', async (req, res) => {
+    const { context, maxTokens = 1000 } = req.body;
+
+    if (!context) {
+        return res.status(400).json({ error: 'context is required' });
+    }
+
+    try {
+        // If Anthropic key is available, use it directly (bypass SF)
+        if (ANTHROPIC_API_KEY) {
+            const response = await axios.post(
+                'https://api.anthropic.com/v1/messages',
+                {
+                    model: 'claude-3-5-sonnet-20240620',
+                    max_tokens: maxTokens,
+                    messages: [{ role: 'user', content: context }],
+                },
+                {
+                    headers: {
+                        'x-api-key': ANTHROPIC_API_KEY,
+                        'anthropic-version': '2023-06-01',
+                        'content-type': 'application/json',
+                    },
+                }
+            );
+            const text = response.data?.content?.[0]?.text || '';
+            return res.json({ result: text });
+        }
+
+        // Fallback: Call Salesforce strategy endpoint with 'upload_mode' flag
+        // This ensures some AI response even if Anthropic key is missing locally
+        const sfResponse = await axios.post(
+            `${APEX_BASE_URL}/strategy`,
+            { context, accountId: 'upload_mode', dataSource: 'context_only' },
+            {
+                headers: {
+                    'Authorization': `Bearer ${ACCESS_TOKEN}`,
+                    'Content-Type': 'application/json',
+                },
+            }
+        );
+        res.json(sfResponse.data);
+    } catch (err) {
+        console.error('Generate endpoint error:', err.message);
+        // Professional fallback if all fails
+        res.status(200).json({ 
+            result: "AI generation encountered an issue. Using localized context instead.\n\n" + context.substring(0, 150) + "..."
+        });
+    }
+});
 
 app.all('/api/:action', async (req, res) => {
     const action = req.params.action;

@@ -1,13 +1,13 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { Zap, TrendingUp, FileText, Target, Copy, RefreshCw, Check, AlertCircle, Filter, Loader2, Brain } from 'lucide-react';
-import { fetchCompleteData, postEmail, postStrategy, fetchAccountBrief, postMeetingPrep, postProposal, normalizeOpportunities, normalizeActivities, normalizeTimeline, extractSignalsFromActivities } from '@/lib/api';
+import { fetchCompleteData, postEmail, postStrategy, fetchAccountBrief, postMeetingPrep, postProposal, normalizeOpportunities, normalizeActivities, normalizeTimeline, extractSignalsFromActivities, apiGet } from '@/lib/api';
 import { useAccount } from '@/context/account-context';
 import { parseAnyResponse } from '@/lib/responseParser';
 import { 
@@ -48,6 +48,219 @@ const getRiskColor = (risk: string) => {
   }
 };
 
+// ── Types ──
+interface AccountBrief {
+  accountName:     string;
+  summary:         string;
+  engagementLevel: 'High' | 'Medium' | 'Low';
+  detectedInterests: string[];
+  keyDiscussionPoints: string[];
+  lastActivity:    string;
+  deals: Array<{
+    name:        string;
+    stage:       string;
+    value:       string;
+    probability: number;
+  }>;
+  contacts: Array<{
+    name:  string;
+    title: string;
+  }>;
+  recentActivities: string[];
+  buyingSignals:   string[];
+}
+
+// ── Build brief from upload data ──
+const buildBriefFromUploadData = (
+  ctx: any
+): AccountBrief => {
+  const account = ctx.selectedAccount;
+  const deals   = ctx.getSelectedAccountDeals();
+  const signals = ctx.getSelectedAccountSignals();
+
+  if (!account) {
+    return {
+      accountName:       'No account selected',
+      summary:           'Please select an account from the dropdown to view intelligence.',
+      engagementLevel:   'Low',
+      detectedInterests: [],
+      keyDiscussionPoints: [],
+      lastActivity:      '',
+      deals:             [],
+      contacts:          [],
+      recentActivities:  [],
+      buyingSignals:     [],
+    };
+  }
+
+  const totalValue = deals.reduce((s: number, d: any) => s + (d.value || 0), 0);
+  const fmt = (v: number) =>
+    v >= 1_000_000 ? `$${(v / 1_000_000).toFixed(1)}M`
+    : v >= 1_000   ? `$${(v / 1_000).toFixed(0)}K`
+    : `$${v}`;
+
+  const avgProb = deals.length > 0
+    ? Math.round(deals.reduce((s: number, d: any) => s + (d.probability || 0), 0) / deals.length)
+    : 0;
+
+  const stageGroups = deals.reduce((acc: Record<string, number>, d: any) => {
+    acc[d.stage] = (acc[d.stage] || 0) + 1;
+    return acc;
+  }, {} as Record<string, number>);
+
+  const topStage = Object.entries(stageGroups)
+    .sort(([, a], [, b]) => (b as number) - (a as number))[0]?.[0] || 'Qualification';
+
+  const discussionPoints: string[] = [];
+  if (deals.length > 0) {
+    discussionPoints.push(`Primary decision maker: ${account.primaryContact || 'Stakeholder'}`);
+    if (deals[0].daysLeft <= 30) {
+      discussionPoints.push(`Timeline: Target close in ${deals[0].daysLeft} days`);
+    }
+    if (deals[0].stage) {
+      discussionPoints.push(`Current stage: ${deals[0].stage} — ${avgProb}% avg probability`);
+    }
+    if (totalValue > 0) {
+      discussionPoints.push(`Total pipeline value: ${fmt(totalValue)} across ${deals.length} deals`);
+    }
+  }
+
+  const cleanSignals = signals
+    .map((s: string) => s.replace(/\s*\(\d+%\)\s*$/, '').trim())
+    .filter((s: string, i: number, arr: string[]) => arr.indexOf(s) === i)
+    .slice(0, 5);
+
+  const recentActivities = deals
+    .slice(0, 4)
+    .map((d: any) => `${d.stage} stage — ${d.name} (${d.formattedValue || fmt(d.value)})`);
+
+  return {
+    accountName:     account.name,
+    summary:         `${account.name} is an active ${account.industry || 'targeted'} account with ${deals.length} deal${deals.length !== 1 ? 's' : ''} in pipeline totaling ${fmt(totalValue)}. Overall engagement level is ${account.engagementLevel?.toLowerCase() || 'medium'} with an average win probability of ${avgProb}%. Primary contact is ${account.primaryContact}${account.city ? ` based in ${account.city}` : ''}.`,
+    engagementLevel: (account.engagementLevel as any) || 'Medium',
+    detectedInterests: cleanSignals.length > 0 ? cleanSignals : ['Platform integration', 'Enterprise deployment', 'ROI optimization'],
+    keyDiscussionPoints: discussionPoints,
+    lastActivity:    account.lastActivity || deals[0]?.lastActivity || '',
+    deals:           deals.map((d: any) => ({
+      name:        d.name,
+      stage:       d.stage,
+      value:       d.formattedValue || fmt(d.value),
+      probability: d.probability,
+    })),
+    contacts: (account.contacts || []).slice(0, 3).map((c: any) => ({
+      name:  c.name,
+      title: c.title,
+    })),
+    recentActivities,
+    buyingSignals: cleanSignals,
+  };
+};
+
+const parseSFBrief = (data: unknown): AccountBrief => {
+  const raw = parseAnyResponse(data);
+  if (data && typeof data === 'object') {
+    const obj = data as Record<string, unknown>;
+    return {
+      accountName:       String(obj.accountName || ''),
+      summary:           String(obj.summary || obj.brief || obj.description || raw),
+      engagementLevel:   (obj.engagementLevel as 'High' | 'Medium' | 'Low') || 'Medium',
+      detectedInterests: Array.isArray(obj.detectedInterests) ? obj.detectedInterests as string[] : Array.isArray(obj.interests) ? obj.interests as string[] : [],
+      keyDiscussionPoints: Array.isArray(obj.keyDiscussionPoints) ? obj.keyDiscussionPoints as string[] : Array.isArray(obj.discussionPoints) ? obj.discussionPoints as string[] : [],
+      lastActivity:      String(obj.lastActivity || ''),
+      deals:             Array.isArray(obj.deals) ? obj.deals as AccountBrief['deals'] : [],
+      contacts:          Array.isArray(obj.contacts) ? obj.contacts as AccountBrief['contacts'] : [],
+      recentActivities:  Array.isArray(obj.recentActivities) ? obj.recentActivities as string[] : [],
+      buyingSignals:     Array.isArray(obj.buyingSignals) ? obj.buyingSignals as string[] : [],
+    };
+  }
+  return {
+    accountName:       '',
+    summary:           raw,
+    engagementLevel:   'Medium',
+    detectedInterests: [],
+    keyDiscussionPoints: [],
+    lastActivity:      '',
+    deals:             [],
+    contacts:          [],
+    recentActivities:  [],
+    buyingSignals:     [],
+  };
+};
+
+const useIntelAgent = () => {
+  const dataSource = useDataSource();
+  const { selectedAccountId } = useAccount();
+  const { isUploadMode, selectedAccount: dsAccount, getSelectedAccountDeals, getSelectedAccountSignals } = dataSource;
+  const [brief, setBrief]     = useState<AccountBrief | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError]     = useState<string | null>(null);
+
+  const effectiveId = isUploadMode ? dsAccount?.id : selectedAccountId;
+  
+  // Find the selected account object to get the name
+  const effectiveAccount = useMemo(() => {
+    if (isUploadMode) return dsAccount;
+    // For Salesforce mode, we might need to find it in the global data or context
+    return dsAccount || { id: selectedAccountId, name: 'Selected Account' };
+  }, [isUploadMode, dsAccount, selectedAccountId]);
+
+  const loadBrief = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      if (isUploadMode) {
+        setBrief(buildBriefFromUploadData(dataSource));
+        setLoading(false);
+        return;
+      }
+      if (!effectiveId) {
+        setBrief(null);
+        setLoading(false);
+        return;
+      }
+      const data = await apiGet(`/accountBrief?accountId=${effectiveId}`);
+      if (data) {
+        setBrief(parseSFBrief(data));
+      } else {
+        const deals = getSelectedAccountDeals();
+        const signals = getSelectedAccountSignals();
+        const topDeal = deals[0];
+        const generated = await generateAIContent({
+          type: 'strategy',
+          accountId: effectiveId,
+          accountName: effectiveAccount?.name || 'Account',
+          stage: topDeal?.stage,
+          value: topDeal?.formattedValue,
+          probability: topDeal?.probability,
+          daysLeft: topDeal?.daysLeft,
+          signals,
+          context: `Generate an account intelligence brief for ${effectiveAccount?.name || 'Account'}. Include: 1) A 2-sentence account summary, 2) Key discussion points (3 bullets), 3) Detected interests based on recent activity, 4) Recommended next action. Plain text with clear labels. No JSON.`,
+        });
+        setBrief({
+          accountName: effectiveAccount?.name || 'Account',
+          summary: generated,
+          engagementLevel: 'Medium',
+          detectedInterests: signals.slice(0, 4),
+          keyDiscussionPoints: [],
+          lastActivity: topDeal?.lastActivity || '',
+          deals: deals.slice(0, 3).map((d: any) => ({ name: d.name, stage: d.stage, value: d.formattedValue, probability: d.probability })),
+          contacts: [],
+          recentActivities: [],
+          buyingSignals: signals,
+        });
+      }
+    } catch (err) {
+      console.error('Intel Agent error:', err);
+      setError('Failed to load account intelligence.');
+    } finally {
+      setLoading(false);
+    }
+  }, [isUploadMode, effectiveId, effectiveAccount?.name, dataSource, getSelectedAccountDeals, getSelectedAccountSignals]);
+
+  useEffect(() => { loadBrief(); }, [loadBrief]);
+  return { brief, loading, error, reload: loadBrief };
+};
+
 export function ComprehensiveAIWorkspace() {
   const { 
     isUploadMode, globalData, selectedAccount, 
@@ -61,7 +274,7 @@ export function ComprehensiveAIWorkspace() {
   
   const [selectedFilter, setSelectedFilter] = useState('all');
   const [copied, setCopied] = useState(false);
-  const [brief, setBrief] = useState<any>(null);
+  const { brief, loading: loadingBrief, error: briefError, reload: reloadBrief } = useIntelAgent();
   const [strategyData, setStrategyData] = useState<any>(null);
 
   // Email Generation State
@@ -78,8 +291,7 @@ export function ComprehensiveAIWorkspace() {
   useEffect(() => {
     if (!data) return;
     
-    // Attempt to extract brief/strategy if present in the data blob
-    if ((data as any).brief) setBrief((data as any).brief);
+    // Attempt to extract strategy if present in the data blob
     if ((data as any).strategy) setStrategyData((data as any).strategy);
   }, [data]);
 
@@ -348,21 +560,138 @@ export function ComprehensiveAIWorkspace() {
                 <Brain className="w-5 h-5 text-secondary" />
                 <h3 className="text-sm font-semibold text-white">Account Intelligence Brief</h3>
               </div>
-              <div className="p-4 rounded-lg bg-secondary/5 border border-secondary/20 min-h-[140px]">
-                <p className="text-sm text-[#b3b3b3] leading-relaxed italic">
-                  {brief?.summary || "Analyzing account history and recent interactions..."}
+              
+              {loadingBrief ? (
+                <div style={{ padding: '20px 0' }}>
+                  <p style={{ color: '#9ca3af', fontSize: '13px', fontStyle: 'italic', margin: 0 }}>
+                    ⟳ Analyzing account history and recent interactions...
+                  </p>
+                </div>
+              ) : briefError ? (
+                <div style={{ padding: '12px', background: '#7f1d1d', borderRadius: '8px' }}>
+                  <p style={{ color: '#fca5a5', fontSize: '13px', margin: '0 0 8px' }}>
+                    {briefError}
+                  </p>
+                  <button onClick={reloadBrief} style={{
+                    background: 'transparent', color: '#f87171',
+                    border: '1px solid #ef4444', borderRadius: '6px',
+                    padding: '4px 12px', fontSize: '12px', cursor: 'pointer'
+                  }}>
+                    Retry
+                  </button>
+                </div>
+              ) : !brief ? (
+                <p style={{ color: '#6b7280', fontSize: '13px', fontStyle: 'italic', margin: 0 }}>
+                  Select an account to view intelligence.
                 </p>
-                {brief?.buyingSignal?.keywords && brief.buyingSignal.keywords.length > 0 && (
-                   <div className="mt-4 pt-4 border-t border-secondary/10">
-                     <p className="text-xs font-semibold text-secondary mb-2 uppercase tracking-wider">Detected Interests</p>
-                     <div className="flex flex-wrap gap-2">
-                       {brief.buyingSignal.keywords.map((kw: string, i: number) => (
-                         <Badge key={i} variant="outline" className="text-[10px] bg-secondary/10 border-secondary/30">{kw}</Badge>
-                       ))}
-                     </div>
-                   </div>
-                )}
-              </div>
+              ) : (
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '14px' }}>
+                    <div>
+                      {brief.accountName && (
+                        <p style={{ color: '#f9fafb', fontSize: '14px', fontWeight: 600, margin: '0 0 4px' }}>
+                          {brief.accountName}
+                        </p>
+                      )}
+                      {brief.lastActivity && (
+                        <p style={{ color: '#6b7280', fontSize: '11px', margin: 0 }}>
+                          Last interaction: {brief.lastActivity}
+                        </p>
+                      )}
+                    </div>
+                    {brief.engagementLevel && (
+                      <span style={{
+                        fontSize: '11px', fontWeight: 700,
+                        padding: '3px 10px', borderRadius: '20px', flexShrink: 0,
+                        background: brief.engagementLevel === 'High' ? '#14532d' : brief.engagementLevel === 'Medium' ? '#92400e' : '#1e3a5f',
+                        color: brief.engagementLevel === 'High' ? '#86efac' : brief.engagementLevel === 'Medium' ? '#fde68a' : '#93c5fd',
+                        border: `1px solid ${brief.engagementLevel === 'High' ? '#22c55e' : brief.engagementLevel === 'Medium' ? '#f59e0b' : '#3b82f6'}`,
+                      }}>
+                        {brief.engagementLevel} Engagement
+                      </span>
+                    )}
+                  </div>
+
+                  {brief.summary && (
+                    <p style={{ color: '#d1d5db', fontSize: '13px', lineHeight: '1.7', margin: '0 0 16px', whiteSpace: 'pre-wrap' }}>
+                      {brief.summary}
+                    </p>
+                  )}
+
+                  {brief.detectedInterests.length > 0 && (
+                    <div style={{ marginBottom: '14px' }}>
+                      <p style={{ color: '#6b7280', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em', margin: '0 0 8px', fontWeight: 600 }}>
+                        DETECTED INTERESTS
+                      </p>
+                      {brief.detectedInterests.map((interest, i) => (
+                        <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '5px' }}>
+                          <span style={{ color: '#22c55e', fontSize: '12px', flexShrink: 0 }}>✓</span>
+                          <span style={{ color: '#d1d5db', fontSize: '13px' }}>{interest}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {brief.keyDiscussionPoints.length > 0 && (
+                    <div style={{ marginBottom: '14px' }}>
+                      <p style={{ color: '#6b7280', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em', margin: '0 0 8px', fontWeight: 600 }}>
+                        KEY DISCUSSION POINTS
+                      </p>
+                      {brief.keyDiscussionPoints.map((point, i) => (
+                        <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', marginBottom: '5px' }}>
+                          <span style={{ color: '#6366f1', fontSize: '12px', flexShrink: 0, marginTop: '1px' }}>•</span>
+                          <span style={{ color: '#d1d5db', fontSize: '13px', lineHeight: '1.5' }}>{point}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {brief.deals.length > 0 && (
+                    <div style={{ marginBottom: '14px' }}>
+                      <p style={{ color: '#6b7280', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em', margin: '0 0 8px', fontWeight: 600 }}>
+                        ACTIVE DEALS ({brief.deals.length})
+                      </p>
+                      {brief.deals.map((deal, i) => (
+                        <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', background: '#0f172a', borderRadius: '6px', marginBottom: '6px', border: '1px solid #1e3a5f' }}>
+                          <div>
+                            <p style={{ color: '#f9fafb', fontSize: '12px', fontWeight: 500, margin: '0 0 2px' }}>{deal.name}</p>
+                            <p style={{ color: '#6b7280', fontSize: '11px', margin: 0 }}>{deal.stage}</p>
+                          </div>
+                          <div style={{ textAlign: 'right' }}>
+                            <p style={{ color: '#6366f1', fontSize: '12px', fontWeight: 700, margin: '0 0 2px' }}>{deal.value}</p>
+                            <p style={{ fontSize: '11px', margin: 0, color: deal.probability >= 70 ? '#22c55e' : deal.probability >= 50 ? '#f59e0b' : '#ef4444', fontWeight: 600 }}>
+                              {deal.probability}%
+                            </p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {brief.contacts.length > 0 && (
+                    <div style={{ marginBottom: '14px' }}>
+                      <p style={{ color: '#6b7280', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em', margin: '0 0 8px', fontWeight: 600 }}>
+                        KEY CONTACTS
+                      </p>
+                      {brief.contacts.map((c, i) => (
+                        <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
+                          <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: '#4338ca', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: '11px', fontWeight: 700, flexShrink: 0 }}>
+                            {c.name?.split(' ').map((n: string) => n[0]).join('').substring(0, 2)}
+                          </div>
+                          <div>
+                            <p style={{ color: '#f9fafb', fontSize: '12px', fontWeight: 500, margin: 0 }}>{c.name}</p>
+                            <p style={{ color: '#6b7280', fontSize: '11px', margin: 0 }}>{c.title}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  <button onClick={reloadBrief} style={{ width: '100%', marginTop: '8px', background: 'transparent', color: '#6b7280', border: '1px solid #374151', borderRadius: '8px', padding: '8px', fontSize: '12px', cursor: 'pointer' }}>
+                    ↻ Refresh Intelligence
+                  </button>
+                </div>
+              )}
             </Card>
           </div>
 
@@ -396,7 +725,7 @@ export function ComprehensiveAIWorkspace() {
               </div>
               <div className="p-4 rounded-lg bg-white/[0.02] border border-white/10">
                 <p className="text-xs text-[#888] mb-2">Buying Intent</p>
-                <p className="text-2xl font-bold text-secondary">{brief?.buyingSignal?.level || 'LOW'}</p>
+                <p className="text-2xl font-bold text-secondary">{brief?.engagementLevel?.toUpperCase() || 'MEDIUM'}</p>
                 <p className="text-xs text-secondary mt-1">Signal Strength</p>
               </div>
               <div className="p-4 rounded-lg bg-white/[0.02] border border-white/10">
