@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { Copy, RotateCw, WandIcon, Download, Save, Loader2 } from 'lucide-react';
-import { fetchAccountBrief, postStrategy, postEmail, postMeetingPrep, postProposal, parseResponse } from '@/lib/api';
+import { fetchAccountBrief } from '@/lib/api';
+import { generateAIContent, GenerationType } from '@/lib/aiGenerator';
 import { useAccount } from '@/context/account-context';
 import { useDataSource } from '@/context/DataSourceContext';
 import { GeneratedContentModal } from './generated-content-modal';
@@ -90,7 +91,7 @@ const CONTENT_LABELS: Record<string, { title: string; subtitle: (name: string) =
 };
 
 export function AIWorkspacePanel() {
-  const { isUploadMode, globalData, selectedAccount, switchToSalesforce } = useDataSource();
+  const { isUploadMode, globalData, selectedAccount, getSelectedAccountDeals, getSelectedAccountSignals, switchToSalesforce } = useDataSource();
   const selectedAccountId = selectedAccount?.id;
   const { copied, copy } = useCopyToClipboard();
   const [activeTab, setActiveTab] = useState('intel');
@@ -131,59 +132,83 @@ export function AIWorkspacePanel() {
   useEffect(() => {
     if (activeTab === 'strategy' && !strategyData && selectedAccountId) {
       setLoadingStrategy(true);
-      postStrategy({ accountId: selectedAccountId }).then((d: any) => {
-        if (d) setStrategyData(d);
+      
+      const deals = getSelectedAccountDeals();
+      const topDeal = deals[0];
+
+      generateAIContent({ 
+        type: 'strategy',
+        accountId: selectedAccountId || undefined,
+        accountName: selectedAccount?.name || 'Account',
+        stage: topDeal?.stage || 'Qualification'
+      }).then((content: string) => {
+        setStrategyData({
+          recommendation: content.substring(0, 150) + '...',
+          winProbability: topDeal?.probability || 65,
+          healthGrade: 'A',
+          priorities: [
+            { title: "Review AI Plan", desc: "Follow AI strategy guidance", badge: "🟡 High", color: "warning" }
+          ],
+          checklist: ['Execute strategy']
+        });
+        setLoadingStrategy(false);
+      }).catch(err => {
+        console.error("Strategy generation failed", err);
         setLoadingStrategy(false);
       });
     }
-  }, [activeTab, selectedAccountId, strategyData]);
+  }, [activeTab, selectedAccountId, strategyData, selectedAccount]);
 
   const handleGenerate = async () => {
-    if (!selectedAccountId) return;
+    if (!selectedAccountId && !isUploadMode) return;
     setLoadingEmail(true);
-    let res;
     
     try {
+      const deals = getSelectedAccountDeals();
+      const topDeal = deals[0];
+      const signals = getSelectedAccountSignals();
+
+      let aiType: GenerationType = 'email';
+      if (emailType === 'proposal') aiType = 'proposal';
+      if (emailType === 'meeting-recap') aiType = 'meetingPrep';
+
       const baseContext = `Generate a ${tone} ${emailType.replace('-', ' ')} for ${selectedAccount?.name || 'the account'}. 
         Industry: ${selectedAccount?.industry || 'enterprise'}.
         Tone: ${tone}.
         Buying signals: ${intelData?.buyingSignals?.join(', ') || 'recent engagement'}.
         Make it personal, specific, and include a clear call to action.`;
 
-      if (emailType === 'proposal') {
-        res = await postProposal({ 
-          tone,
-          accountId: selectedAccountId,
-          context: `Generate a comprehensive sales proposal for ${selectedAccount?.name}. Include executive summary, pain points, proposed solution, and ROI. ${baseContext}`
-        });
-      } else if (emailType === 'meeting-recap') {
-        res = await postMeetingPrep({
-          tone,
-          accountId: selectedAccountId,
-          context: `Generate a professional meeting summary document for ${selectedAccount?.name}. Include decisions made and action items. ${baseContext}`
-        });
-      } else {
-        res = await postEmail({ 
-          tone, 
-          type: emailType,
-          accountId: selectedAccountId,
-          context: baseContext
-        });
-      }
+      const generatedStr = await generateAIContent({
+        type: aiType,
+        accountId: selectedAccountId || undefined,
+        accountName: selectedAccount?.name || 'Account',
+        contactName: selectedAccount?.primaryContact || 'Contact',
+        stage: topDeal?.stage || 'Qualification',
+        value: topDeal?.formattedValue || topDeal?.value || '$0',
+        probability: topDeal?.probability || 65,
+        daysLeft: topDeal?.daysLeft || 30,
+        signals,
+        industry: selectedAccount?.industry || 'Technology',
+        tone: tone,
+        context: baseContext
+      });
 
-      const content = parseResponse(res);
-      const resObj = res as any;
       setEmailData({ 
-        subject: resObj?.email?.subject || resObj?.subject || CONTENT_LABELS[emailType]?.title || 'Generated Content', 
-        content: content, 
+        subject: CONTENT_LABELS[emailType]?.title || 'Generated Content', 
+        content: generatedStr, 
         type: emailType, 
         tone 
       });
     } catch (err) {
-      console.error('Generation failed', err);
-    } finally {
-      setLoadingEmail(false);
+      console.error('Email generation failed:', err);
+      setEmailData({
+        subject: 'Generation Failed',
+        content: 'Failed to generate content. Please try again.',
+        type: emailType,
+        tone
+      });
     }
+    setLoadingEmail(false);
   };
 
   const onTypeChange = (type: string) => {

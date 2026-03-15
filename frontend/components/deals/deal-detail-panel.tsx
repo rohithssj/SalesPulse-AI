@@ -8,7 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { Mail, Phone, Calendar, User, TrendingUp, AlertCircle, Zap, FileText, MessageSquare, Plus, Share2, Copy, Check, X } from 'lucide-react';
-import { postEmail, postStrategy, postMeetingPrep } from '@/lib/api';
+import { generateAIContent } from '@/lib/aiGenerator';
 import { useAccount } from '@/context/account-context';
 import { useDataSource } from '@/context/DataSourceContext';
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard';
@@ -121,20 +121,19 @@ export function DealDetailPanel({ dealId = 'DEAL-2024-001' }: DealDetailPanelPro
   const handleStart = async (action: Action) => {
     setLoadingActions(prev => ({ ...prev, [action.id]: true }));
     try {
-      const data = await postEmail({
-        accountId: selectedAccountId,
-        type: 'action_start',
-        context: buildEngagementPlanContext({
-          dealName: dealData.name,
-          accountName: selectedAccount?.name || dealData.account,
-          stage: dealData.stage,
-          value: dealData.value,
-          probability: dealData.probability,
-          daysLeft: 10,
-        })
+      const content = await generateAIContent({
+        type:        'email',
+        accountId:   selectedAccountId || undefined,
+        accountName: selectedAccount?.name || dealData.account || 'Account',
+        contactName: dealData.contact || 'Contact',
+        stage:       dealData.stage || 'Qualification',
+        value:       dealData.formattedValue || dealData.value || '$0',
+        probability: dealData.probability || 65,
+        daysLeft:    10,
+        context:     `Generate an email to execute this action: "${action.action}". Account: ${selectedAccount?.name}. Priority: ${action.priority}. Deadline: ${action.timeline}. Make it direct and actionable.`,
       });
 
-      setActionResults(prev => ({ ...prev, [action.id]: parseAnyResponse(data) }));
+      setActionResults(prev => ({ ...prev, [action.id]: content }));
       setStartedActions(prev => ({ ...prev, [action.id]: true }));
     } catch (err) {
       console.error('Failed to start action', err);
@@ -164,11 +163,14 @@ export function DealDetailPanel({ dealId = 'DEAL-2024-001' }: DealDetailPanelPro
     setShowAddModal(false);
     
     try {
-      const data = await postStrategy({
-        accountId: selectedAccountId,
-        context: `Provide a tactical execution plan for: "${newAction.title}" for ${selectedAccount?.name}.`
+      const content = await generateAIContent({
+        type: 'strategy',
+        accountId: selectedAccountId || undefined,
+        accountName: selectedAccount?.name || dealData.account || 'Account',
+        stage: dealData.stage || 'Qualification',
+        context: `Provide a tactical execution plan for: "${newAction.title}" for ${selectedAccount?.name || dealData.account}.`
       });
-      setActionResults(prev => ({ ...prev, [tempId]: parseAnyResponse(data) }));
+      setActionResults(prev => ({ ...prev, [tempId]: content }));
     } catch (err) {
       console.error('Failed to generate AI suggestion', err);
     }
@@ -179,22 +181,22 @@ export function DealDetailPanel({ dealId = 'DEAL-2024-001' }: DealDetailPanelPro
   const handleEmailMember = async (member: any) => {
     setGeneratingEmail(prev => ({ ...prev, [member.name]: true }));
     try {
-      const data = await postEmail({
-        accountId: selectedAccountId,
-        accountName: selectedAccount?.name,
-        tone: 'Formal',
-        type: 'team_outreach',
-        context: buildFollowUpContext({
-          accountName: selectedAccount?.name || dealData.account,
-          contactName: member.name,
-          contactRole: member.role,
-          stage: dealData.stage,
-          value: dealData.value,
-          probability: dealData.probability,
-          daysLeft: 10,
-        })
+      const content = await generateAIContent({
+        type:        'email',
+        accountId:   selectedAccountId || undefined,
+        accountName: selectedAccount?.name || dealData.account || 'Account',
+        contactName: member.name,
+        contactRole: member.role,
+        stage:       dealData.stage || 'Qualification',
+        value:       dealData.formattedValue || dealData.value || '$0',
+        probability: dealData.probability || 65,
+        daysLeft:    dealData.daysLeft || 30,
+        signals:     [member.status === 'engaged'
+          ? 'Actively engaged — maintain momentum'
+          : 'Needs re-engagement — warm outreach required'],
       });
-      setEmailResults(prev => ({ ...prev, [member.name]: parseAnyResponse(data) }));
+
+      setEmailResults(prev => ({ ...prev, [member.name]: content }));
       setShowEmailModal(member.name);
     } catch (err) {
       console.error('Email generation failed', err);
@@ -206,24 +208,19 @@ export function DealDetailPanel({ dealId = 'DEAL-2024-001' }: DealDetailPanelPro
   const handleCallPrep = async (member: any) => {
     setPreparingCall(prev => ({ ...prev, [member.name]: true }));
     try {
-      const data = await postMeetingPrep({
-        accountId: selectedAccountId,
-        accountName: selectedAccount?.name,
+      const content = await generateAIContent({
+        type:        'callprep',
+        accountId:   selectedAccountId || undefined,
+        accountName: selectedAccount?.name || dealData.account || 'Account',
         contactName: member.name,
         contactRole: member.role,
-        dealStage: dealData.stage,
-        dealValue: dealData.value,
-        context: buildCallPrepContext({
-          accountName: selectedAccount?.name || dealData.account,
-          contactName: member.name,
-          contactRole: member.role,
-          stage: dealData.stage,
-          value: dealData.value,
-          probability: dealData.probability,
-          daysLeft: 10,
-        })
+        stage:       dealData.stage || 'Qualification',
+        value:       dealData.formattedValue || dealData.value || '$0',
+        probability: dealData.probability || 65,
+        daysLeft:    dealData.daysLeft || 30,
       });
-      setCallPreps(prev => ({ ...prev, [member.name]: parseAnyResponse(data) }));
+      
+      setCallPreps(prev => ({ ...prev, [member.name]: content }));
       setShowCallModal(member.name);
     } catch (err) {
       console.error('Call prep failed', err);

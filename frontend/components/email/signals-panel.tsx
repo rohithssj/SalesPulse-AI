@@ -4,7 +4,7 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useAccount } from '@/context/account-context';
-import { fetchEmail, fetchProposal, fetchStrategy, fetchMeetingPrep, parseResponse } from '@/lib/api';
+import { generateAIContent, GenerationType } from '@/lib/aiGenerator';
 import { GeneratedContentModal } from './generated-content-modal';
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard';
 
@@ -98,65 +98,29 @@ export function SignalsPanel() {
     setIsGenerating(true);
     setModalOpen(true);
 
+    let actionType: GenerationType = 'email';
+    if (signal.action.includes('Proposal')) actionType = 'proposal';
+    else if (signal.action.includes('Pricing')) actionType = 'pricing';
+    else if (signal.action.includes('Follow-up')) actionType = 'followup';
+    else if (signal.action.includes('Re-engagement')) actionType = 'reengagement';
+    else if (signal.action.includes('Meeting')) actionType = 'meetingPrep';
+    else if (signal.action.includes('Strategy')) actionType = 'strategy';
+
     try {
-      let res;
-      const accountId = selectedAccountId;
-      const accountName = selectedAccount?.Name || signal.deal;
+      const content = await generateAIContent({
+        type:        actionType,
+        accountId:   selectedAccountId || signal.accountId || undefined,
+        accountName: selectedAccount?.Name || signal.deal,
+        contactName: 'Contact',
+        stage:       'Qualification',
+        value:       '$0',
+        probability: signal.confidence,
+        daysLeft:    30,
+        signals:     [signal.description || signal.title],
+        industry:    'Technology',
+        tone:        'Formal',
+      });
 
-      if (signal.type === 'proposal_interest') {
-        res = await fetchProposal({
-          accountId,
-          accountName,
-          tone: "Formal",
-          type: "proposal",
-          emailType: "proposal_request_response",
-          context: `The account ${accountName} has explicitly requested a detailed project scope and feature breakdown. Signal detected ${signal.timestamp}. Confidence: ${signal.confidence}%. Generate a formal proposal email that addresses their request with specific deliverables, timeline, and pricing structure.`,
-          signalType: signal.type,
-          urgency: "high"
-        }, accountId);
-      } else if (signal.type === 'pricing_discussion') {
-        res = await fetchEmail({
-          accountId,
-          accountName,
-          tone: "Formal",
-          type: "pricing",
-          emailType: "pricing_details",
-          context: `${accountName} has inquired about the enterprise plan and annual licensing. Detected ${signal.timestamp}. Generate a pricing email that covers enterprise plan tiers, annual vs monthly billing, volume discounts, and a clear call to action to schedule a pricing call.`,
-          signalType: "pricing_inquiry",
-          urgency: "medium"
-        }, accountId);
-      } else if (signal.type === 'engagement') {
-        res = await fetchEmail({
-          accountId,
-          accountName,
-          tone: "Friendly",
-          type: "followup",
-          emailType: "engagement_followup",
-          context: `${accountName} has shown high email engagement - ${signal.description}. Detected ${signal.timestamp}. Generate a warm follow-up email that acknowledges their interest, offers a personalized demo, and creates urgency around a limited-time offer.`,
-          signalType: "high_engagement",
-          urgency: "high"
-        }, accountId);
-      } else if (signal.type === 'inactivity') {
-        res = await fetchEmail({
-          accountId,
-          accountName,
-          tone: "Friendly",
-          type: "reengagement",
-          emailType: "reengagement",
-          context: `${accountName} has gone silent (${signal.description}). Generate a re-engagement email that re-establishes value, acknowledges the gap in communication, references their original pain points, and offers something new (case study, ROI report, or exclusive offer) to restart the conversation.`,
-          signalType: "dormant",
-          urgency: "low"
-        }, accountId);
-      } else {
-        // Fallback for Strategy or Meeting Prep
-        if (signal.action.includes('Meeting')) {
-          res = await fetchMeetingPrep({ context: signal.description }, accountId);
-        } else {
-          res = await fetchStrategy({ context: signal.description }, accountId);
-        }
-      }
-
-      const content = parseResponse(res);
       setModalContent(content);
     } catch (err) {
       setModalContent('Failed to generate response. Please try again.');

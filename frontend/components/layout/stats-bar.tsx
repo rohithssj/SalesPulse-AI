@@ -7,12 +7,7 @@ import { normalizeOpportunities } from '@/lib/api';
 export function StatsBar() {
   const { data, loading } = usePageData(
     '/completeData',
-    (gd) => ({
-      activeDeals: gd.summary.activeDeals,
-      pipelineValue: gd.summary.totalPipelineValue,
-      winRate: gd.summary.winRate,
-      avgDealSize: gd.summary.avgDealSize,
-    })
+    (ctx) => ctx.globalData
   );
 
   const stats = (() => {
@@ -23,11 +18,8 @@ export function StatsBar() {
       { label: 'Avg Deal Size', value: '$0K', icon: <Users className="w-4 h-4" />, trend: 0, color: 'from-success to-warning' },
     ];
 
-    // For salesforce mode, we might still receive the full data object which needs normalization
-    // usePageData handles the switching logic, but if output is from salesforce it might be raw
     const getStats = () => {
-      // If we are in upload mode, data is already the object we selected
-      // If we are in salesforce mode, data is the result of apiGet('/completeData')
+      // Salesforce mode: data is raw array or object with opportunities
       const isRaw = (data as any).opportunities !== undefined || Array.isArray(data);
       if (isRaw) {
         const opps = normalizeOpportunities(data);
@@ -41,11 +33,13 @@ export function StatsBar() {
         return { activeDeals, totalPipe, winRate, avgSize };
       }
       
+      // Upload mode: data is GlobalData, stats are in summary
+      const summary = (data as any).summary;
       return {
-        activeDeals: (data as any).activeDeals,
-        totalPipe: (data as any).pipelineValue,
-        winRate: (data as any).winRate,
-        avgSize: (data as any).avgDealSize
+        activeDeals: summary?.activeDeals || 0,
+        totalPipe: summary?.totalPipelineValue || 0,
+        winRate: summary?.winRate || 0,
+        avgSize: summary?.avgDealSize || 0
       };
     };
 

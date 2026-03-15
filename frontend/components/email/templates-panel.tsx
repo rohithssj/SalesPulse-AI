@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAccount } from '@/context/account-context';
-import { fetchEmail, parseResponse } from '@/lib/api';
+import { generateAIContent } from '@/lib/aiGenerator';
 import { GeneratedContentModal } from './generated-content-modal';
 import { useTemplates, EmailTemplate } from '@/hooks/use-templates';
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard';
@@ -36,13 +36,12 @@ export function TemplatesPanel() {
     setModalOpen(true);
 
     try {
-      const res = await fetchEmail({
-        accountId: selectedAccountId,
-        accountName: selectedAccount?.Name,
+      const content = await generateAIContent({
+        type: 'email',
+        accountId: selectedAccountId || undefined,
+        accountName: selectedAccount?.Name || 'Account',
+        stage: 'Evaluation',
         tone: 'Friendly',
-        type: 'template',
-        emailType: template.category,
-        templateName: template.name,
         context: `Use the "${template.name}" email template as a base structure.
           Personalize it for ${selectedAccount?.Name || 'the account'}.
           Replace all placeholder variables: 
@@ -52,10 +51,9 @@ export function TemplatesPanel() {
           Template base: ${template.preview}.
           Adapt the tone to be friendly and make it feel genuinely written for this specific account.
           Reference their industry (${selectedAccount?.Industry || 'technology'}) if relevant.`
-      }, selectedAccountId);
+      });
 
-      const generated = parseResponse(res);
-      setModalContent(generated || template.preview);
+      setModalContent(content || template.preview);
     } catch (err) {
       setModalContent('Failed to personalize template. Using default preview.\n\n' + template.preview);
     } finally {

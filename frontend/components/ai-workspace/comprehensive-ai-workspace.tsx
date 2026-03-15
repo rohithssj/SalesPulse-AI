@@ -16,6 +16,7 @@ import {
   buildEngagementPlanContext,
   buildCallPrepContext
 } from '@/lib/contextBuilder';
+import { generateAIContent, GenerationType } from '@/lib/aiGenerator';
 import { RenderedContent } from '../shared/RenderedContent';
 import { usePageData } from '@/hooks/usePageData';
 import { useDataSource } from '@/context/DataSourceContext';
@@ -117,18 +118,25 @@ export function ComprehensiveAIWorkspace() {
         });
       }
 
-      let endpoint = postEmail;
-      if (selectedContentType === 'summary') endpoint = postMeetingPrep;
-      if (selectedContentType === 'proposal_draft') endpoint = postProposal;
+      let aiType: GenerationType = 'email';
+      if (selectedContentType === 'summary') aiType = 'meetingPrep';
+      if (selectedContentType === 'proposal_draft') aiType = 'proposal';
+      if (selectedContentType === 'followup') aiType = 'followup';
 
-      const res = await endpoint({ 
-        tone: selectedTone, 
+      const content = await generateAIContent({
+        type: aiType,
         accountId: selectedAccount?.id,
-        type: selectedContentType,
+        accountName: commonParams.accountName,
+        contactName: commonParams.contactName,
+        stage: commonParams.stage,
+        value: commonParams.value,
+        probability: commonParams.probability,
+        daysLeft: commonParams.daysLeft,
+        tone: selectedTone,
         context: context
       });
       
-      setGeneratedEmail(parseAnyResponse(res));
+      setGeneratedEmail(content);
     } catch (err) {
       console.error("Content generation failed:", err);
       setGeneratedEmail("Network error. Please try again.");
@@ -153,8 +161,25 @@ export function ComprehensiveAIWorkspace() {
     }
     setLoadingStrategy(true);
     try {
-      const res = await postStrategy({ accountId: selectedAccount?.id });
-      if (res) setStrategyData(res);
+      // For Salesforce mode only, generate a strategy plan based on context
+      const content = await generateAIContent({
+        type: 'strategy',
+        accountId: selectedAccount?.id,
+        accountName: selectedAccount?.name || 'Account',
+        stage: selectedAccount?.deals?.[0]?.stage || 'Qualification',
+      });
+      
+      // We'll mock the structured object from the generic text for now 
+      // since the legacy backend returned a structured JSON object
+      setStrategyData({
+        recommendation: content.substring(0, 150) + '...',
+        winProbability: selectedAccount?.deals?.[0]?.probability || 65,
+        healthGrade: 'A',
+        priorities: [
+          { title: "Review AI Plan", desc: "Follow AI strategy guidance", badge: "🟡 High", color: "warning" }
+        ],
+        checklist: ['Execute strategy']
+      });
     } catch (err) {
       console.error("Strategy fetch failed:", err);
     }

@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { Upload, FileText, CheckCircle, AlertCircle, Trash2, Database, Sparkles } from 'lucide-react';
 import { useDataSource, GlobalData } from '@/context/DataSourceContext';
-import { normalizeToGlobalData, parseFileToRows } from '@/lib/parseAndNormalize';
+import { parseFileToGlobalData } from '@/lib/parseAndNormalize';
 
 export function UploadPortal() {
   const { switchToUpload } = useDataSource();
@@ -19,28 +19,41 @@ export function UploadPortal() {
     const file = Array.from(files)[0];
     if (!file) return;
 
-    setUploadState({ status: 'parsing', progress: 10, fileName: file.name, preview: null, error: '' });
+    setUploadState({
+      status: 'parsing', progress: 15,
+      fileName: file.name, preview: null, error: ''
+    });
 
     try {
-      // Step 1: Parse file to rows
-      setUploadState(p => ({ ...p, progress: 30 }));
-      const rows = await parseFileToRows(file);
+      setUploadState(p => ({ ...p, progress: 35, status: 'parsing' }));
       
-      setUploadState(p => ({ ...p, status: 'analyzing', progress: 60 }));
+      const globalData = await parseFileToGlobalData(file);
+      
+      setUploadState(p => ({ ...p, progress: 75, status: 'analyzing' }));
 
-      // Step 2: Normalize data
-      const normalized = normalizeToGlobalData(rows, file.name);
-      setUploadState(p => ({ ...p, progress: 90 }));
+      // Small delay so user sees the progress
+      await new Promise(r => setTimeout(r, 400));
 
-      // Step 3: Ready — show preview
       setUploadState(p => ({
-        ...p, status: 'ready', progress: 100, preview: normalized
+        ...p, progress: 100,
+        status: 'ready',
+        preview: globalData
       }));
 
+      console.log('✅ Parsed data:', {
+        accounts: globalData.accounts.length,
+        deals: globalData.deals.length,
+        activities: globalData.activities.length,
+        summary: globalData.summary,
+      });
+
     } catch (err: unknown) {
+      console.error('Upload parse error:', err);
       setUploadState(p => ({
         ...p, status: 'error',
-        error: err instanceof Error ? err.message : 'Failed to parse file'
+        error: err instanceof Error
+          ? err.message
+          : 'Failed to parse file. Check console for details.'
       }));
     }
   };

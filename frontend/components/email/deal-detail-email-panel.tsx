@@ -3,7 +3,8 @@ import { Clock, Mail, Send, Zap, MessageSquare, FileText, Loader2, RotateCw, Cop
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { fetchEmail, fetchCompleteData, parseResponse } from '@/lib/api';
+import { fetchCompleteData } from '@/lib/api';
+import { generateAIContent } from '@/lib/aiGenerator';
 import { useAccount } from '@/context/account-context';
 import { GeneratedContentModal } from './generated-content-modal';
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard';
@@ -87,15 +88,17 @@ export function DealDetailEmailPanel() {
     if (!selectedAccountId) return;
     setIsGenerating(true);
     try {
-      const data = await fetchEmail({
-        type: 'response',
+      const content = await generateAIContent({
+        type: 'email',
+        accountId: selectedAccountId,
+        accountName: selectedAccount?.Name || 'Account',
+        stage: (selectedAccount as any)?.deals?.[0]?.stage || 'Evaluation',
         tone: 'persuasive',
         context: `Generate a persuasive response to the latest interaction for ${selectedAccount?.Name}.
           Account history summary: ${selectedAccount?.Industry || 'enterprise'} sector.
           Focus on addressing their most recent needs and pushing for the next meeting.`
-      }, selectedAccountId);
-      const content = parseResponse(data);
-      setEmailDraft({ subject: data?.email?.subject || 'Suggested Response', content: content });
+      });
+      setEmailDraft({ subject: 'Suggested Response', content: content });
     } catch (err) {
       console.error('Failed to generate draft', err);
     } finally {
@@ -112,7 +115,7 @@ export function DealDetailEmailPanel() {
     try {
       const data = await fetchCompleteData(selectedAccountId);
       // Logic to find actual email body from activities/emails if present
-      const activities = data?.activities || [];
+      const activities = (data as any)?.activities || [];
       const match = activities.find((a: any) => a.Subject === interaction.subject || a.subject === interaction.subject);
       
       setModalContent(match?.Description || match?.description || `Subject: ${interaction.subject}\nFrom: ${interaction.recipientName}\nDate: ${interaction.timestamp}\n\n[Body content not found in current Salesforce activity view. Fetching metadata...]`);

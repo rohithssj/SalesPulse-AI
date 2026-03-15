@@ -6,7 +6,8 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useAccount } from '@/context/account-context';
-import { fetchCompleteData, fetchEmail, postEmail } from '@/lib/api';
+import { fetchCompleteData } from '@/lib/api';
+import { generateAIContent } from '@/lib/aiGenerator';
 import { usePageData } from '@/hooks/usePageData';
 import { GeneratedContentModal } from './generated-content-modal';
 import { parseAnyResponse } from '@/lib/responseParser';
@@ -62,23 +63,20 @@ export function EmailAlertsPanel() {
     setModalOpen(true);
 
     try {
-      const res = await fetchEmail({
-        accountId: selectedAccountId,
-        accountName: alert.accountName,
-        tone: 'Friendly',
+      const content = await generateAIContent({
         type: 'followup',
-        context: buildFollowUpContext({
-          accountName: alert.accountName,
-          contactName: 'Prospect',
-          stage: 'Evaluation',
-          value: 'N/A',
-          probability: alert.confidence,
-          signals: [alert.title, alert.description],
-          daysLeft: 14,
-        })
+        accountId: selectedAccountId || undefined,
+        accountName: alert.accountName,
+        contactName: 'Prospect',
+        stage: 'Evaluation',
+        value: '$0',
+        probability: alert.confidence,
+        signals: [alert.title, alert.description],
+        daysLeft: 14,
+        tone: 'Friendly',
       });
       
-      setModalContent(parseAnyResponse(res));
+      setModalContent(content);
     } catch (err) {
       setModalContent('Failed to generate draft. Please try again.');
     } finally {
@@ -92,10 +90,12 @@ export function EmailAlertsPanel() {
 
     for (let i = 0; i < alertsToDisplay.length; i++) {
       try {
-        await fetchEmail({
-          accountId: selectedAccountId,
-          tone: 'Friendly',
+        await generateAIContent({
           type: 'followup',
+          accountId: selectedAccountId || undefined,
+          accountName: alertsToDisplay[i].accountName || 'Account',
+          stage: 'Evaluation',
+          tone: 'Friendly',
           context: alertsToDisplay[i].description
         });
         successCount++;

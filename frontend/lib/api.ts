@@ -1,13 +1,40 @@
-export const API_URL = (process.env.REACT_APP_SF_PROXY_URL || 'http://localhost:3001') + '/api';
+const PROXY_BASE = process.env.NEXT_PUBLIC_PROXY_URL || process.env.REACT_APP_SF_PROXY_URL || 'http://localhost:3001';
+const STORAGE_KEY = 'salespulse_uploaded_data';
+
+export const API_URL = `${PROXY_BASE}/api`;
+
+// Detect if we are currently in upload mode
+export const isUploadMode = (): boolean => {
+  if (typeof window === 'undefined') return false;
+  try {
+    return localStorage.getItem(STORAGE_KEY) !== null;
+  } catch {
+    return false;
+  }
+};
+
+// Check if an accountId is a real Salesforce ID
+// Salesforce IDs are 15 or 18 alphanumeric characters
+// Upload IDs look like ACC001, acc_0, deal_1 etc.
+export const isValidSalesforceId = (id: string): boolean => {
+  if (!id) return false;
+  // Salesforce IDs: 15 or 18 chars, alphanumeric only
+  return /^[a-zA-Z0-9]{15,18}$/.test(id.trim());
+};
+
+// Get a safe accountId for Salesforce calls
+// Returns null if the ID is not a valid Salesforce ID
+export const getSafeAccountId = (
+  accountId: string | undefined
+): string | null => {
+  if (!accountId) return null;
+  if (isValidSalesforceId(accountId)) return accountId;
+  return null; // Upload mode ID — do not send to Salesforce
+};
 
 export async function apiFetch<T>(
-  endpoint: string, 
-  options?: {
-    method?: 'GET' | 'POST';
-    body?: any;
-    params?: Record<string, string>;
-    headers?: Record<string, string>;
-  }
+  endpoint: string,
+  options?: RequestInit & { params?: Record<string, string> }
 ): Promise<T | null> {
   try {
     let url = `${API_URL}${endpoint}`;
@@ -18,33 +45,36 @@ export async function apiFetch<T>(
       url = `${url}${url.includes('?') ? '&' : '?'}${qs}`;
     }
 
-    const fetchOptions: RequestInit = {
-      method: options?.method || 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-        ...options?.headers,
-      },
-    };
+    const { params, ...fetchOptions } = options || {};
 
-    if (options?.method === 'POST' && options.body) {
-      fetchOptions.body = JSON.stringify(options.body);
-    }
+    const res = await fetch(url, {
+      ...fetchOptions,
+      headers: { 'Content-Type': 'application/json', ...fetchOptions.headers },
+    });
 
-    const res = await fetch(url, fetchOptions);
-    
     if (!res.ok) {
-      const errorText = await res.text();
-      console.error(`API Error on ${endpoint}: ${res.status} ${res.statusText}`, errorText);
+      const errorText = await res.text().catch(() => '');
+      console.error(
+        `API Error on ${endpoint}: ${res.status} ${res.statusText}`,
+        errorText
+      );
       return null;
     }
-    
-    return await res.json();
+    return (await res.json()) as T;
   } catch (err) {
-    console.error(`Network Error on ${endpoint}:`, err);
+    console.error(`Network error on ${endpoint}:`, err);
     return null;
   }
 }
 
+export const apiGet = <T>(endpoint: string, params?: Record<string, string>) =>
+  apiFetch<T>(endpoint, { method: 'GET', params });
+
+export const apiPost = <T>(endpoint: string, body: object) =>
+  apiFetch<T>(endpoint, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
 /**
  * Universal response parser to handle various Salesforce Apex response shapes
  */
@@ -108,18 +138,8 @@ export function parseAIResponse(data: any): string {
   return 'Unexpected response format. Please try again.';
 }
 
-// GET helper
-export async function apiGet<T>(endpoint: string): Promise<T | null> {
-  return apiFetch<T>(endpoint, { method: 'GET' });
-}
+// Removed old definitions
 
-// POST helper
-export async function apiPost<T>(endpoint: string, body: object): Promise<T | null> {
-  return apiFetch<T>(endpoint, {
-    method: 'POST',
-    body: body,
-  });
-}
 
 // ── Named aliases used across components ──
 

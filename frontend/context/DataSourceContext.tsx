@@ -40,6 +40,20 @@ export interface NormalizedAccount {
   deals: NormalizedDeal[];
   buyingSignals: string[];
   engagementLevel: 'High' | 'Medium' | 'Low';
+  // --- New fields from multi-sheet Excel ---
+  city?: string;
+  country?: string;
+  website?: string;
+  contactCount?: number;
+  dealCount?: number;
+  totalDealValue?: number;
+  contacts?: Array<{
+    id: string;
+    name: string;
+    title: string;
+    email: string;
+    phone: string;
+  }>;
 }
 
 export interface NormalizedActivity {

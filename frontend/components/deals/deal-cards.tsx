@@ -3,7 +3,8 @@
 import { useState, useEffect } from 'react';
 import { TrendingUp, Users, Calendar, Zap, Loader2, Copy, X } from 'lucide-react';
 import { useAccount } from '@/context/account-context';
-import { fetchCompleteData, normalizeOpportunities, fetchEmail, fetchStrategy, parseResponse } from '@/lib/api';
+import { fetchCompleteData, normalizeOpportunities } from '@/lib/api';
+import { generateAIContent } from '@/lib/aiGenerator';
 import { getDealColor, getStageBorderColor } from '@/lib/deal-colors';
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard';
 import { GeneratedContentModal } from '../email/generated-content-modal';
@@ -56,24 +57,20 @@ export function DealCards() {
     setModalOpen(true);
 
     try {
-      const res = await fetchEmail({
-        accountId: deal.accountId,
+      const content = await generateAIContent({
+        type:        'engage',
+        accountId:   deal.accountId || undefined,
         accountName: deal.accountName,
         contactName: deal.contact || 'Customer',
-        tone: "Formal",
-        type: "engage",
-        context: buildEngagementPlanContext({
-          dealName: deal.name,
-          accountName: deal.accountName,
-          contactName: deal.contact || 'Customer',
-          stage: deal.dealStage,
-          value: deal.dealValue,
-          probability: deal.winProbability,
-          daysLeft: deal.daysLeft || 7,
-        })
-      }, selectedAccountId);
+        dealName:    deal.name,
+        stage:       deal.dealStage || 'Qualification',
+        value:       deal.formattedValue || deal.dealValue || '$0',
+        probability: deal.winProbability || 65,
+        daysLeft:    deal.daysLeft || 7,
+        industry:    deal.industry,
+      });
 
-      setModalContent(parseAnyResponse(res));
+      setModalContent(content);
     } catch (err) {
       setModalContent('Error generating engagement plan. Please try again.');
     } finally {
@@ -92,20 +89,19 @@ export function DealCards() {
 
     setLoadingTips(prev => ({ ...prev, [deal.id]: true }));
     try {
-      const res = await fetchStrategy({
-        accountId: deal.accountId,
-        context: buildAITipsContext({
-          dealName: deal.name,
-          accountName: deal.accountName,
-          contactName: deal.contact || 'Customer',
-          stage: deal.dealStage,
-          value: deal.dealValue,
-          probability: deal.winProbability,
-          daysLeft: deal.daysLeft || 7,
-        })
-      }, selectedAccountId);
+      const content = await generateAIContent({
+        type:        'strategy',
+        accountId:   deal.accountId || undefined,
+        accountName: deal.accountName,
+        contactName: deal.contact || 'Customer',
+        dealName:    deal.name,
+        stage:       deal.dealStage || 'Qualification',
+        value:       deal.formattedValue || deal.dealValue || '$0',
+        probability: deal.winProbability || 65,
+        daysLeft:    deal.daysLeft || 7,
+      });
 
-      setTips(prev => ({ ...prev, [deal.id]: parseAnyResponse(res) }));
+      setTips(prev => ({ ...prev, [deal.id]: content }));
     } catch (err) {
       setTips(prev => ({ ...prev, [deal.id]: 'Failed to load tips.' }));
     } finally {
