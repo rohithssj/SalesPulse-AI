@@ -1,9 +1,0 @@
-{
-  "name": "salespulse-ai",
-  "version": "1.0.0",
-  "private": true,
-  "scripts": {
-    "build": "npm run build --prefix frontend",
-    "deploy": "vercel --prod"
-  }
-}
