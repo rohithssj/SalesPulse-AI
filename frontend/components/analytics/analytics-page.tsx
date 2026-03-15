@@ -9,6 +9,8 @@ import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, AreaChart, Area, X
 import { Calendar, Download, TrendingUp, Users, Mail, Target, Loader2 } from 'lucide-react';
 import { fetchCompleteData, normalizeOpportunities, normalizeActivities, buildPipelineData, buildHealthScoreData, buildTopAccounts } from '@/lib/api';
 import { useAccount } from '@/context/account-context';
+import { useDataSource } from '@/context/DataSourceContext';
+import { useAnalyticsData } from '@/hooks/useAnalyticsData';
 
 const COLORS = ['#8fb39a', '#7ea38a', '#b39a6b', '#d97706'];
 
@@ -19,6 +21,9 @@ export function AnalyticsPage() {
     '/completeData',
     (ctx) => ctx.globalData
   );
+
+  const { data: uploadData, isUploadMode } = useAnalyticsData();
+  const { globalData } = useDataSource();
 
   const [activeTab, setActiveTab] = useState('overview');
   const [selectedPeriod, setSelectedPeriod] = useState('30d');
@@ -102,6 +107,24 @@ export function AnalyticsPage() {
     };
   }, [data]);
 
+  // ── Adapters for Upload Data ──
+  const effectiveTotalPipeline = isUploadMode ? (uploadData?.formattedPipelineValue ?? '$0') : totalPipeline;
+  const effectiveActiveDeals = isUploadMode ? (uploadData?.activeDeals ?? 0) : activeDeals;
+  const effectiveWinRate = isUploadMode ? `${uploadData?.winRate ?? 0}%` : winRate;
+  const effectiveAvgDealSize = isUploadMode ? (uploadData?.formattedAvgDealSize ?? '$0') : avgDealSize;
+
+  const effectivePipelineData = isUploadMode && uploadData
+    ? uploadData.pipelineByStage.map(s => ({ stage: s.stage, value: s.value, deals: s.count }))
+    : pipelineData;
+
+  const effectiveHealthDistribution = isUploadMode && uploadData
+    ? uploadData.dealHealthDist.map(d => ({ name: d.name, value: d.value, color: d.color }))
+    : healthDistribution;
+
+  const effectiveConversionMetrics = isUploadMode && uploadData
+    ? uploadData.salesFunnel.map(s => ({ stage: s.stage, count: s.count, rate: `${s.percentage}%` }))
+    : conversionMetrics;
+
   if (loading) {
     return (
       <div className="flex items-center justify-center p-12">
@@ -134,23 +157,23 @@ export function AnalyticsPage() {
       <div className="grid grid-cols-4 gap-4">
         <Card className="glass luxury-panel border-[#2a2a2a] p-4 rounded-lg">
           <p className="text-xs text-[#888] uppercase tracking-wider mb-1">Total Pipeline</p>
-          <p className="text-2xl font-bold text-white">{totalPipeline}</p>
-          <p className="text-xs text-success mt-2">↑ 12% vs last month</p>
+          <p className="text-2xl font-bold text-white">{effectiveTotalPipeline}</p>
+          <p className="text-xs text-success mt-2">{isUploadMode ? `${effectiveActiveDeals} active deals` : '↑ 12% vs last month'}</p>
         </Card>
         <Card className="glass luxury-panel border-[#2a2a2a] p-4 rounded-lg">
           <p className="text-xs text-[#888] uppercase tracking-wider mb-1">Active Deals</p>
-          <p className="text-2xl font-bold text-white">{activeDeals}</p>
-          <p className="text-xs text-[#888] mt-2">8 proposals pending</p>
+          <p className="text-2xl font-bold text-white">{effectiveActiveDeals}</p>
+          <p className="text-xs text-[#888] mt-2">{isUploadMode ? `${uploadData?.salesFunnel?.length ?? 0} stages active` : '8 proposals pending'}</p>
         </Card>
         <Card className="glass luxury-panel border-[#2a2a2a] p-4 rounded-lg">
           <p className="text-xs text-[#888] uppercase tracking-wider mb-1">Win Rate</p>
-          <p className="text-2xl font-bold text-primary">{winRate}</p>
-          <p className="text-xs text-[#888] mt-2">Industry avg: 28%</p>
+          <p className="text-2xl font-bold text-primary">{effectiveWinRate}</p>
+          <p className="text-xs text-[#888] mt-2">{isUploadMode ? `${uploadData?.accountAnalysis?.length ?? 0} accounts analyzed` : 'Industry avg: 28%'}</p>
         </Card>
         <Card className="glass luxury-panel border-[#2a2a2a] p-4 rounded-lg">
           <p className="text-xs text-[#888] uppercase tracking-wider mb-1">Avg Deal Size</p>
-          <p className="text-2xl font-bold text-secondary">{avgDealSize}</p>
-          <p className="text-xs text-success mt-2">↑ 8% increase</p>
+          <p className="text-2xl font-bold text-secondary">{effectiveAvgDealSize}</p>
+          <p className="text-xs text-success mt-2">{isUploadMode ? `${uploadData?.engagementMetrics?.totalSignals ?? 0} signals detected` : '↑ 8% increase'}</p>
         </Card>
       </div>
 
@@ -175,9 +198,9 @@ export function AnalyticsPage() {
               <h3 className="text-sm font-semibold text-white mb-4">Pipeline by Stage</h3>
               <div className="h-80">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={pipelineData}>
+                  <BarChart data={effectivePipelineData}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#2a2a2a" />
-                    <XAxis dataKey="stage" stroke="#666" fontSize={12} />
+                    <XAxis dataKey="stage" stroke="#666" fontSize={10} interval={0} />
                     <YAxis stroke="#666" />
                     <Tooltip contentStyle={{ backgroundColor: '#1a1a1a', border: '1px solid #2a2a2a', borderRadius: '8px' }} />
                     <Bar dataKey="value" fill="#8fb39a" radius={[8, 8, 0, 0]} />
@@ -200,7 +223,7 @@ export function AnalyticsPage() {
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
                       <Pie
-                        data={healthDistribution}
+                        data={effectiveHealthDistribution}
                         cx="50%"
                         cy="45%"
                         labelLine={false}
@@ -210,7 +233,7 @@ export function AnalyticsPage() {
                         fill="#8884d8"
                         dataKey="value"
                       >
-                        {healthDistribution.map((entry, index) => (
+                        {effectiveHealthDistribution.map((entry: any, index: number) => (
                           <Cell key={`cell-${index}`} fill={entry.color} />
                         ))}
                       </Pie>
@@ -233,7 +256,7 @@ export function AnalyticsPage() {
           <Card className="glass luxury-panel border-[#2a2a2a] p-6 rounded-lg">
             <h3 className="text-sm font-semibold text-white mb-4">Sales Funnel</h3>
             <div className="space-y-4">
-              {conversionMetrics.map((metric, idx) => (
+              {effectiveConversionMetrics.map((metric, idx) => (
                 <div key={idx}>
                   <div className="flex items-center justify-between mb-2">
                     <div>
@@ -245,7 +268,7 @@ export function AnalyticsPage() {
                   <div className="w-full bg-white/10 rounded-full h-3">
                     <div
                       className="bg-gradient-to-r from-primary to-secondary h-3 rounded-full"
-                      style={{ width: `${(metric.count / (conversionMetrics[0]?.count || 1)) * 100}%` }}
+                      style={{ width: `${(metric.count / (effectiveConversionMetrics[0]?.count || 1)) * 100}%` }}
                     />
                   </div>
                 </div>
@@ -298,19 +321,25 @@ export function AnalyticsPage() {
           {/* Engagement Stats */}
           <div className="grid grid-cols-4 gap-4">
             <Card className="glass luxury-panel border-[#2a2a2a] p-4 rounded-lg">
-              <p className="text-xs text-[#888] uppercase tracking-wider mb-2">Avg Opens/Week</p>
-              <p className="text-2xl font-bold text-primary">74</p>
-              <p className="text-xs text-success mt-2">↑ 15% increase</p>
+              <p className="text-xs text-[#888] uppercase tracking-wider mb-2">{isUploadMode ? 'High Engagement Accounts' : 'Avg Opens/Week'}</p>
+              <p className="text-2xl font-bold text-primary">
+                {isUploadMode ? (uploadData?.engagementMetrics?.highEngagement ?? 0) : '74'}
+              </p>
+              <p className="text-xs text-success mt-2">{isUploadMode ? 'Accounts with High interest' : '↑ 15% increase'}</p>
             </Card>
             <Card className="glass luxury-panel border-[#2a2a2a] p-4 rounded-lg">
-              <p className="text-xs text-[#888] uppercase tracking-wider mb-2">Click Rate</p>
-              <p className="text-2xl font-bold text-secondary">32%</p>
-              <p className="text-xs text-[#888] mt-2">vs 22% industry</p>
+              <p className="text-xs text-[#888] uppercase tracking-wider mb-2">{isUploadMode ? 'Medium Engagement' : 'Click Rate'}</p>
+              <p className="text-2xl font-bold text-secondary">
+                {isUploadMode ? (uploadData?.engagementMetrics?.mediumEngagement ?? 0) : '32%'}
+              </p>
+              <p className="text-xs text-[#888] mt-2">{isUploadMode ? 'Nurturing required' : 'vs 22% industry'}</p>
             </Card>
             <Card className="glass luxury-panel border-[#2a2a2a] p-4 rounded-lg">
-              <p className="text-xs text-[#888] uppercase tracking-wider mb-2">Response Rate</p>
-              <p className="text-2xl font-bold text-warning">18%</p>
-              <p className="text-xs text-success mt-2">↑ 5% vs last month</p>
+              <p className="text-xs text-[#888] uppercase tracking-wider mb-2">{isUploadMode ? 'Total Buying Signals' : 'Response Rate'}</p>
+              <p className="text-2xl font-bold text-warning">
+                {isUploadMode ? (uploadData?.engagementMetrics?.totalSignals ?? 0) : '18%'}
+              </p>
+              <p className="text-xs text-success mt-2">{isUploadMode ? 'From latest updates' : '↑ 5% vs last month'}</p>
             </Card>
             <Card className="glass luxury-panel border-[#2a2a2a] p-4 rounded-lg">
               <p className="text-xs text-[#888] uppercase tracking-wider mb-2">Meetings Scheduled</p>
@@ -318,39 +347,94 @@ export function AnalyticsPage() {
               <p className="text-xs text-[#888] mt-2">From 280 touches</p>
             </Card>
           </div>
+
+          {isUploadMode && uploadData && (
+            <Card className="glass luxury-panel border-[#2a2a2a] p-6 rounded-lg mt-6">
+              <h3 className="text-sm font-semibold text-white mb-4">Signal Breakdown</h3>
+              <div className="space-y-4">
+                {uploadData.engagementMetrics.signalsByType.map((s, i) => (
+                  <div key={i} className="flex items-center justify-between">
+                    <span className="text-sm text-[#d1d5db]">{s.type}</span>
+                    <div className="flex items-center gap-3">
+                      <div className="w-48 h-2 bg-white/10 rounded-full overflow-hidden">
+                        <div 
+                          className="h-full bg-primary" 
+                          style={{ width: `${Math.round((s.count / (uploadData.engagementMetrics.totalSignals || 1)) * 100)}%` }} 
+                        />
+                      </div>
+                      <span className="text-sm font-bold text-primary min-w-[30px] text-right">{s.count}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          )}
         </TabsContent>
 
         {/* Account Analysis Tab */}
         <TabsContent value="accounts" className="space-y-6">
           <Card className="glass luxury-panel border-[#2a2a2a] p-6 rounded-lg">
-            <h3 className="text-sm font-semibold text-white mb-4">Top Accounts by Pipeline Value</h3>
+            <h3 className="text-sm font-semibold text-white mb-4">
+              {isUploadMode ? 'Detailed Account Breakdown' : 'Top Accounts by Pipeline Value'}
+            </h3>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-white/10">
                     <th className="text-left py-2 px-3 text-xs font-semibold text-[#a3a3a3] uppercase">Account</th>
-                    <th className="text-left py-2 px-3 text-xs font-semibold text-[#a3a3a3] uppercase">Pipeline Value</th>
-                    <th className="text-left py-2 px-3 text-xs font-semibold text-[#a3a3a3] uppercase">Growth</th>
-                    <th className="text-left py-2 px-3 text-xs font-semibold text-[#a3a3a3] uppercase">Health</th>
+                    <th className="text-left py-2 px-3 text-xs font-semibold text-[#a3a3a3] uppercase">{isUploadMode ? 'Industry' : 'Pipeline Value'}</th>
+                    <th className="text-left py-2 px-3 text-xs font-semibold text-[#a3a3a3] uppercase">{isUploadMode ? 'Deals' : 'Growth'}</th>
+                    <th className="text-left py-2 px-3 text-xs font-semibold text-[#a3a3a3] uppercase">{isUploadMode ? 'Pipeline' : 'Health'}</th>
+                    {isUploadMode && (
+                      <>
+                        <th className="text-left py-2 px-3 text-xs font-semibold text-[#a3a3a3] uppercase">Avg Win %</th>
+                        <th className="text-left py-2 px-3 text-xs font-semibold text-[#a3a3a3] uppercase">Engagement</th>
+                      </>
+                    )}
                   </tr>
                 </thead>
                 <tbody>
-                  {topAccounts.map((account, idx) => (
-                    <tr key={idx} className="border-b border-white/5 hover:bg-white/[0.02]">
-                      <td className="py-3 px-3 text-white font-medium">{account.name}</td>
-                      <td className="py-3 px-3 text-[#b3b3b3]">${(account.value / 1000).toFixed(0)}K</td>
-                      <td className="py-3 px-3 text-success">↑ {account.growth}%</td>
-                      <td className="py-3 px-3">
-                        <Badge
-                          className={`text-[10px] border ${
-                            account.health >= 80 ? 'bg-success/10 text-success border-success/30' : 'bg-warning/10 text-warning border-warning/30'
-                          }`}
-                        >
-                          {account.health}%
-                        </Badge>
-                      </td>
-                    </tr>
-                  ))}
+                  {isUploadMode && uploadData ? (
+                    uploadData.accountAnalysis.map((acc, idx) => (
+                      <tr key={idx} className="border-b border-white/5 hover:bg-white/[0.02]">
+                        <td className="py-3 px-3 text-white font-medium">{acc.name}</td>
+                        <td className="py-3 px-3 text-[#9ca3af]">{acc.industry}</td>
+                        <td className="py-3 px-3 text-[#d1d5db] text-center">{acc.dealCount}</td>
+                        <td className="py-3 px-3 text-primary font-bold">{acc.formattedValue}</td>
+                        <td className="py-3 px-3">
+                          <span className={`font-bold ${acc.avgProbability >= 70 ? 'text-success' : acc.avgProbability >= 50 ? 'text-warning' : 'text-destructive'}`}>
+                            {acc.avgProbability}%
+                          </span>
+                        </td>
+                        <td className="py-3 px-3">
+                          <Badge variant="outline" className={`text-[10px] ${
+                            acc.engagementLevel === 'High' ? 'bg-success/10 text-success border-success/30' :
+                            acc.engagementLevel === 'Medium' ? 'bg-warning/10 text-warning border-warning/30' :
+                            'bg-blue-500/10 text-blue-400 border-blue-500/30'
+                          }`}>
+                            {acc.engagementLevel}
+                          </Badge>
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    topAccounts.map((account, idx) => (
+                      <tr key={idx} className="border-b border-white/5 hover:bg-white/[0.02]">
+                        <td className="py-3 px-3 text-white font-medium">{account.name}</td>
+                        <td className="py-3 px-3 text-[#b3b3b3]">${(account.value / 1000).toFixed(0)}K</td>
+                        <td className="py-3 px-3 text-success">↑ {account.growth}%</td>
+                        <td className="py-3 px-3">
+                          <Badge
+                            className={`text-[10px] border ${
+                              account.health >= 80 ? 'bg-success/10 text-success border-success/30' : 'bg-warning/10 text-warning border-warning/30'
+                            }`}
+                          >
+                            {account.health}%
+                          </Badge>
+                        </td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
