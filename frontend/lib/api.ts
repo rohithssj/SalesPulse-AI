@@ -54,7 +54,8 @@ export async function apiFetch<T>(
 
     if (!res.ok) {
       const errorText = await res.text().catch(() => '');
-      console.error(
+      // Use console.warn to prevent Next.js from showing a full-screen error overlay
+      console.warn(
         `API Error on ${endpoint}: ${res.status} ${res.statusText}`,
         errorText
       );
@@ -62,7 +63,7 @@ export async function apiFetch<T>(
     }
     return (await res.json()) as T;
   } catch (err) {
-    console.error(`Network error on ${endpoint}:`, err);
+    console.warn(`Network error on ${endpoint}:`, err);
     return null;
   }
 }
