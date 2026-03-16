@@ -79,9 +79,9 @@ export default function Home() {
           backgroundSize: '80px 80px',
         }}
       />
-      {/* Soft white ambient gradients */}
-      <div className="fixed top-1/4 right-1/4 w-[520px] h-[520px] rounded-full bg-white/[0.05] blur-[130px] pointer-events-none lux-orb" />
-      <div className="fixed bottom-1/3 left-1/4 w-[420px] h-[420px] rounded-full bg-white/[0.04] blur-[110px] pointer-events-none lux-orb" style={{ animationDelay: '1.8s' }} />
+      {/* Soft white ambient gradients - Ensure they don't cause overflow */}
+      <div className="fixed top-1/4 right-1/4 w-[280px] sm:w-[520px] h-[280px] sm:h-[520px] rounded-full bg-white/[0.05] blur-[80px] sm:blur-[130px] pointer-events-none lux-orb" />
+      <div className="fixed bottom-1/3 left-1/4 w-[220px] sm:w-[420px] h-[220px] sm:h-[420px] rounded-full bg-white/[0.04] blur-[70px] sm:blur-[110px] pointer-events-none lux-orb" style={{ animationDelay: '1.8s' }} />
 
       <div className="relative z-10 max-w-screen-2xl mx-auto px-4 sm:px-8 py-8 md:py-12">
 
@@ -91,7 +91,7 @@ export default function Home() {
             <div className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
             <span className="text-[10px] sm:text-xs font-medium text-[#b3b3b3]">Ranked #1 AI sales platform for modern teams</span>
           </div>
-          <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold leading-[1.1] md:leading-[1.05] tracking-tight mb-6 text-white animate-fade-up-soft" style={{ animationDelay: '0.08s' }}>
+          <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold leading-[1.1] md:leading-[1.05] tracking-tight mb-6 text-white animate-fade-up-soft" style={{ animationDelay: '0.08s' }}>
             Sales intelligence,
             <br />
             <span className="display-italic text-white/95">without</span> the guesswork.

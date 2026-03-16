@@ -188,7 +188,7 @@ export function DealRadar() {
       )}
 
       {/* Radar Legend */}
-      <div className="radar-legend mt-4 flex items-center justify-center gap-6 border-t border-white/5 pt-4">
+      <div className="radar-legend mt-4 flex flex-wrap items-center justify-center gap-x-6 gap-y-3 border-t border-white/5 pt-4">
         <div className="flex items-center gap-1.5 transition-all hover:opacity-100 opacity-70">
           <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: '#22c55e', boxShadow: '0 0 8px rgba(34, 197, 94, 0.4)' }} />
           <span className="text-[11px] font-semibold text-[#bbf7d0]">High (75%+)</span>

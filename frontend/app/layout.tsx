@@ -24,11 +24,11 @@ export default function RootLayout({
       <head>
         <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" async></script>
       </head>
-      <body className={`${inter.className} antialiased bg-background text-foreground min-h-screen`}>
+      <body className={`${inter.className} antialiased bg-background text-foreground min-h-screen flex w-full overflow-x-hidden`}>
         <DataSourceProvider>
           <AccountProvider>
             <Sidebar />
-            <main className="md:ml-20 lg:ml-64 min-h-screen px-4 sm:px-8 py-20 lg:py-8 transition-all duration-300">
+            <main className="flex-1 min-w-0 min-h-screen px-4 sm:px-6 lg:px-8 pt-24 pb-12 lg:py-8 transition-all duration-300 relative overflow-x-hidden">
               {children}
             </main>
             <NotificationCenter />

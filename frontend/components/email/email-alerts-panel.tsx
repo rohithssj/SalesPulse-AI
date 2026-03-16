@@ -205,7 +205,7 @@ export function EmailAlertsPanel() {
 
       <Card className="glass rounded-xl p-6 border border-white/10 bg-white/[0.01]">
         <h4 className="text-sm font-semibold text-white mb-4">Email Activity Summary</h4>
-        <div className="grid grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <div className="text-center">
             <div className="text-2xl font-bold text-primary">{(data as any)?.emailsSentToday || 0}</div>
             <p className="text-xs text-[#888] mt-2">Emails Sent Today</p>

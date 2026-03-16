@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { TrendingUp, AlertCircle, Target, CheckCircle2, Zap, Mail, Loader2 } from 'lucide-react';
 import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { Card } from '@/components/ui/card';
@@ -15,15 +15,30 @@ export function DashboardMetrics() {
   const { isUploadMode, globalData, selectedAccount } = useDataSource();
   const [sfData, setSfData] = useState<any>(null);
   const [loadingSf, setLoadingSf] = useState(false);
+  const [errorSf, setErrorSf] = useState<string | null>(null);
 
-  useEffect(() => {
+  const loadData = useCallback(() => {
     if (isUploadMode || !selectedAccountId) return;
     setLoadingSf(true);
-    fetchCompleteData(selectedAccountId).then((res) => {
-      setSfData(res || {});
-      setLoadingSf(false);
-    });
+    setErrorSf(null);
+    fetchCompleteData(selectedAccountId)
+      .then((res) => {
+        if (!res) throw new Error('Failed to load dashboard data');
+        setSfData(res);
+        setErrorSf(null);
+      })
+      .catch((err) => {
+        console.error('Dashboard load error:', err);
+        setErrorSf('Unable to load CRM data. Please check your connection.');
+      })
+      .finally(() => {
+        setLoadingSf(false);
+      });
   }, [selectedAccountId, isUploadMode]);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
   const data = isUploadMode ? globalData : sfData;
   const loading = isUploadMode ? false : loadingSf;
@@ -84,6 +99,20 @@ export function DashboardMetrics() {
 
   const COLORS = ['#ef4444', '#f97316', '#22c55e', '#8fb39a'];
 
+  if (errorSf && !isUploadMode) {
+    return (
+      <Card className="glass luxury-panel border-red-500/20 p-8 text-center bg-red-500/5">
+        <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4 opacity-50" />
+        <h3 className="text-lg font-semibold text-white mb-2">Sync Error</h3>
+        <p className="text-sm text-[#888] mb-6 max-w-md mx-auto">{errorSf}</p>
+        <Button onClick={loadData} className="bg-red-500 hover:bg-red-600 text-white gap-2">
+          <TrendingUp className="w-4 h-4 rotate-90" />
+          Retry Connection
+        </Button>
+      </Card>
+    );
+  }
+
   if (loading) {
     return (
       <div className="space-y-6 animate-pulse">
@@ -103,52 +132,52 @@ export function DashboardMetrics() {
 
   return (
     <div className="space-y-6 animate-fade-up-soft">
-      {/* KPI Grid - Requirement 10: 1/2/4/6 responsive grid */}
+      {/* KPI Grid - Requirement 10: 1/2/3/6 responsive grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-        <Card className="glass luxury-panel border-[#2a2a2a] p-4 rounded-lg">
-          <p className="text-xs text-[#888] font-medium uppercase tracking-wider">Pipeline Value</p>
-          <div className="text-2xl font-bold text-primary mt-2">${(totalPipelineValue / 1000).toFixed(1)}K</div>
+        <Card className="glass luxury-panel border-[#2a2a2a] p-4 rounded-lg overflow-hidden">
+          <p className="text-[10px] text-[#888] font-bold uppercase tracking-wider truncate">Pipeline Value</p>
+          <div className="text-2xl font-bold text-primary mt-2 truncate">${(totalPipelineValue / 1000).toFixed(1)}K</div>
           <p className="text-[10px] text-success mt-1">↑ 12%</p>
         </Card>
 
-        <Card className="glass luxury-panel border-[#2a2a2a] p-4 rounded-lg">
-          <p className="text-xs text-[#888] font-medium uppercase tracking-wider">Active Deals</p>
+        <Card className="glass luxury-panel border-[#2a2a2a] p-4 rounded-lg overflow-hidden">
+          <p className="text-[10px] text-[#888] font-bold uppercase tracking-wider truncate">Active Deals</p>
           <div className="text-2xl font-bold text-secondary mt-2">{activeDealsCount}</div>
           <p className="text-[10px] text-success mt-1">↑ 3 new</p>
         </Card>
 
-        <Card className="glass luxury-panel border-[#2a2a2a] p-4 rounded-lg">
-          <p className="text-xs text-[#888] font-medium uppercase tracking-wider">Buying Signals</p>
+        <Card className="glass luxury-panel border-[#2a2a2a] p-4 rounded-lg overflow-hidden">
+          <p className="text-[10px] text-[#888] font-bold uppercase tracking-wider truncate">Buying Signals</p>
           <div className="text-2xl font-bold text-warning mt-2">{buyingSignalsDetected}</div>
           <p className="text-[10px] text-warning mt-1">🔥 Action</p>
         </Card>
 
-        <Card className="glass luxury-panel border-[#2a2a2a] p-4 rounded-lg">
-          <p className="text-xs text-[#888] font-medium uppercase tracking-wider">Avg Health</p>
+        <Card className="glass luxury-panel border-[#2a2a2a] p-4 rounded-lg overflow-hidden">
+          <p className="text-[10px] text-[#888] font-bold uppercase tracking-wider truncate">Avg Health</p>
           <div className="text-2xl font-bold text-success mt-2">{avgHealthScore}%</div>
           <p className="text-[10px] text-success mt-1">Strong</p>
         </Card>
 
-        <Card className="glass luxury-panel border-[#2a2a2a] p-4 rounded-lg">
-          <p className="text-xs text-[#888] font-medium uppercase tracking-wider">High-Risk</p>
+        <Card className="glass luxury-panel border-[#2a2a2a] p-4 rounded-lg overflow-hidden">
+          <p className="text-[10px] text-[#888] font-bold uppercase tracking-wider truncate">High-Risk</p>
           <div className="text-2xl font-bold text-red-500 mt-2">{highRiskDeals}</div>
-          <Badge className="mt-2 bg-red-500/10 text-red-500 border-red-500/30 text-[10px] border">
+          <Badge className="mt-2 bg-red-500/10 text-red-500 border-red-500/30 text-[10px] border truncate max-w-full">
             ⚠️ Monitor
           </Badge>
         </Card>
 
-        <Card className="glass luxury-panel border-[#2a2a2a] p-4 rounded-lg">
-          <p className="text-xs text-[#888] font-medium uppercase tracking-wider">Queue</p>
+        <Card className="glass luxury-panel border-[#2a2a2a] p-4 rounded-lg overflow-hidden">
+          <p className="text-[10px] text-[#888] font-bold uppercase tracking-wider truncate">Queue</p>
           <div className="text-2xl font-bold text-primary mt-2">{dealsNeedingFollowUp}</div>
-          <Button size="sm" className="mt-2 h-6 text-[10px] gap-1 bg-primary/20 hover:bg-primary/30 text-primary border border-primary/30 w-full">
+          <Button size="sm" className="mt-2 h-7 text-[10px] gap-1 bg-primary/20 hover:bg-primary/30 text-primary border border-primary/30 w-full truncate">
             <Mail className="w-3 h-3" />
-            Gen
+            Generate
           </Button>
         </Card>
       </div>
 
-      {/* Main Dashboard Layout - Requirements 7: 1/2/3 grid layout */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+      {/* Main Dashboard Layout - Requirements 10: 1/2/3 grid layout */}
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 shadow-sm">
         {/* Pipeline Stage Distribution */}
         <Card className="glass luxury-panel border-[#2a2a2a] p-4 md:p-6 rounded-lg">
           <h3 className="text-sm font-semibold text-white mb-4">Pipeline Stage Distribution</h3>
@@ -242,23 +271,23 @@ export function DashboardMetrics() {
         <div className="space-y-2">
           {recentSignals.length > 0 ? (
             recentSignals.map((item: any, idx: number) => (
-              <div key={idx} className="flex items-start justify-between p-3 rounded-lg hover:bg-white/[0.02] transition-colors">
-                <div className="flex items-start gap-3 flex-1">
+              <div key={idx} className="flex items-start justify-between p-3 rounded-lg hover:bg-white/[0.02] transition-colors border border-transparent hover:border-white/5">
+                <div className="flex items-start gap-3 flex-1 min-w-0">
                   <Zap className="w-4 h-4 text-warning flex-shrink-0 mt-0.5" />
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-white">{item.signal}</p>
-                    <p className="text-xs text-[#888]">{item.account} • {item.time}</p>
+                    <p className="text-sm font-medium text-white truncate">{item.signal}</p>
+                    <p className="text-[10px] text-[#666] truncate">{item.account} • {item.time}</p>
                   </div>
                 </div>
-                <Badge className="text-[10px] bg-warning/10 text-warning border-warning/30 border flex-shrink-0">
+                <Badge className="text-[10px] bg-warning/10 text-warning border-warning/30 border flex-shrink-0 ml-2">
                   {item.confidence}%
                 </Badge>
               </div>
             ))
           ) : (
             <div className="flex flex-col items-center justify-center p-8 text-center border border-dashed border-white/10 rounded-lg">
-              <Zap className="w-8 h-8 text-white/10 mb-2" />
-              <p className="text-xs text-[#666]">No buying signals detected for this account yet.</p>
+              <Zap className="w-8 h-8 text-white/5 mb-2" />
+              <p className="text-xs text-[#555]">No buying signals detected for this account yet.</p>
             </div>
           )}
         </div>

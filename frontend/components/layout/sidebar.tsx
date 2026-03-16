@@ -45,30 +45,31 @@ export function Sidebar() {
 
   return (
     <>
-      {/* Mobile Header / Hamburger */}
-      <div className="lg:hidden fixed top-0 left-0 right-0 h-16 glass z-[60] flex items-center justify-between px-6 border-b border-white/10">
-        <div className="text-xl font-bold text-white tracking-tight">SalesPulse</div>
+      {/* Mobile Header - Visible only below lg breakpoint */}
+      <div className="lg:hidden fixed top-0 left-0 right-0 h-16 glass z-[60] flex items-center justify-between px-4 border-b border-white/10 w-full max-w-full overflow-hidden">
+        <div className="text-xl font-bold text-white tracking-tight truncate pr-2">SalesPulse</div>
         <button 
           onClick={() => setIsOpen(!isOpen)}
-          className="p-2 text-white hover:bg-white/10 rounded-lg transition-colors"
+          className="p-2 text-white hover:bg-white/10 rounded-lg transition-colors border border-white/5 flex-shrink-0"
+          aria-label="Toggle Menu"
         >
           {isOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
         </button>
       </div>
 
-      {/* Backdrop (Mobile Only) */}
+      {/* Backdrop (Mobile Only) - Requirement 2 */}
       {isOpen && (
         <div 
-          className="lg:hidden fixed inset-0 bg-black/60 backdrop-blur-sm z-[55]"
+          className="lg:hidden fixed inset-0 bg-black/60 backdrop-blur-md z-[55]"
           onClick={() => setIsOpen(false)}
         />
       )}
 
       {/* Sidebar Container - Requirement 10: responsive breakpoints */}
       <div className={`
-        glass fixed left-0 top-0 h-screen border-r border-white/10 flex flex-col p-4 lg:p-6 backdrop-blur-xl z-[58]
+        glass fixed lg:sticky lg:translate-x-0 left-0 top-0 h-screen border-r border-white/10 flex flex-col p-4 lg:p-6 backdrop-blur-xl z-[58]
         transition-all duration-300 ease-in-out
-        ${isOpen ? 'w-64 translate-x-0' : '-translate-x-full md:translate-x-0 md:w-20 lg:w-64 shadow-2xl md:shadow-none'}
+        ${isOpen ? 'w-64 translate-x-0 shadow-2xl' : '-translate-x-full md:translate-x-0 md:w-20 lg:w-64 shadow-none'}
       `}>
         {/* Logo */}
         <div className={`mb-6 hidden ${isOpen ? 'block' : 'lg:block md:hidden'}`}>

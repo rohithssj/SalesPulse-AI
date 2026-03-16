@@ -488,47 +488,45 @@ export function ComprehensiveAIWorkspace() {
   return (
     <div className="space-y-6 animate-fade-up-soft">
       <Tabs defaultValue="intel" className="w-full">
-        <TabsList className="grid w-full grid-cols-2 md:grid-cols-4 bg-[#0f0f0f] border border-[#2a2a2a] p-1 rounded-lg mb-8">
-          <TabsTrigger
-            value="intel"
-            className="text-xs font-semibold data-[state=active]:bg-white/10 data-[state=active]:text-white text-[#888]"
-          >
-            🧠 Intel Agent
-          </TabsTrigger>
-          <TabsTrigger
-            value="score"
-            className="text-xs font-semibold data-[state=active]:bg-white/10 data-[state=active]:text-white text-[#888]"
-          >
-            📊 Score Agent
-          </TabsTrigger>
-          <TabsTrigger
-            value="generate"
-            className="text-xs font-semibold data-[state=active]:bg-white/10 data-[state=active]:text-white text-[#888]"
-          >
-            ✨ Generate Agent
-          </TabsTrigger>
-          <TabsTrigger
-            value="strategy"
-            className="text-xs font-semibold data-[state=active]:bg-white/10 data-[state=active]:text-white text-[#888]"
-          >
-            🎯 Strategy Agent
-          </TabsTrigger>
-        </TabsList>
+        <div className="overflow-x-auto pb-4 custom-scrollbar">
+          <TabsList className="flex min-w-max bg-[#0f0f0f] border border-[#2a2a2a] p-1 rounded-lg mb-2">
+            <TabsTrigger
+              value="intel"
+              className="text-xs font-semibold data-[state=active]:bg-white/10 data-[state=active]:text-white text-[#888] px-6"
+            >
+              🧠 Intel Agent
+            </TabsTrigger>
+            <TabsTrigger
+              value="score"
+              className="text-xs font-semibold data-[state=active]:bg-white/10 data-[state=active]:text-white text-[#888] px-6"
+            >
+              📊 Score Agent
+            </TabsTrigger>
+            <TabsTrigger
+              value="generate"
+              className="text-xs font-semibold data-[state=active]:bg-white/10 data-[state=active]:text-white text-[#888] px-6"
+            >
+              ✨ Generate Agent
+            </TabsTrigger>
+            <TabsTrigger
+              value="strategy"
+              className="text-xs font-semibold data-[state=active]:bg-white/10 data-[state=active]:text-white text-[#888] px-6"
+            >
+              🎯 Strategy Agent
+            </TabsTrigger>
+          </TabsList>
+        </div>
 
-        {/* Intel Tab */}
+        {/* Intel Tab - Requirements 10: Standardized 1/2 grid pattern */}
         <TabsContent value="intel" className="space-y-6">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Buying Signals List */}
-            <Card className="glass luxury-panel border-[#2a2a2a] p-6 rounded-lg">
-              <div className="flex items-center justify-between mb-4">
+            <Card className="glass luxury-panel border-[#2a2a2a] p-6 rounded-lg overflow-hidden">
+              <div className="flex items-center justify-between mb-6">
                 <h3 className="text-sm font-semibold text-white flex items-center gap-2">
                   <Zap className="w-4 h-4 text-warning" />
-                  Detected Buying Signals
+                  Buying Signals
                 </h3>
-                <Button size="sm" variant="outline" className="text-[10px] gap-1 border-white/20">
-                  <Filter className="w-3 h-3" />
-                  Filter
-                </Button>
               </div>
               <div className="space-y-2">
                 {buyingSignals.length > 0 ? (
@@ -536,16 +534,16 @@ export function ComprehensiveAIWorkspace() {
                     <div key={signal.id} className="p-3 rounded-lg bg-white/[0.02] border border-white/10 hover:border-white/20 transition-colors">
                       <div className="flex items-start justify-between gap-2 mb-2">
                         <p className="text-sm font-medium text-white">
-                          {signal.signal || signal.detail || signal.type || 'Engagement Signal'}
+                          {signal.signal || signal.detail || 'Engagement Signal'}
                         </p>
-                        <Badge className={`text-[10px] ${getSeverityColor(signal.severity || signal.intentLevel)} border`}>
-                          { (signal.severity || signal.intentLevel)?.toLowerCase() === 'high' || (signal.severity || signal.intentLevel)?.toLowerCase() === 'critical' ? '🔴' : '🟡'} {signal.severity || signal.intentLevel || 'Medium'}
+                        <Badge className={`text-[10px] ${signal.severity?.toLowerCase() === 'high' || signal.severity?.toLowerCase() === 'critical' ? 'bg-red-500/10 text-red-500 border-red-500/30' : 'bg-warning/10 text-warning border-warning/30'} border`}>
+                          { (signal.severity?.toLowerCase() === 'high' || signal.severity?.toLowerCase() === 'critical') ? '🔴' : '🟡'} {signal.severity || 'Medium'}
                         </Badge>
                       </div>
-                      <p className="text-xs text-[#888]">{signal.account || brief?.accountName || 'Active Account'}</p>
+                      <p className="text-xs text-[#888]">{brief?.accountName || 'Active Account'}</p>
                       <div className="flex items-center justify-between mt-2">
-                        <span className="text-[10px] text-[#666]">{signal.time || signal.messageDate || 'Recent'}</span>
-                        <span className="text-[10px] font-bold text-primary">{signal.confidence || (signal.intentLevel === 'HIGH' ? 95 : 70)}% confidence</span>
+                        <span className="text-[10px] text-[#666]">{signal.time || 'Recent'}</span>
+                        <span className="text-[10px] font-bold text-primary">{signal.confidence || 85}% confidence</span>
                       </div>
                     </div>
                   ))
@@ -789,41 +787,50 @@ export function ComprehensiveAIWorkspace() {
             </Card>
           </div>
 
-          {/* Deal Score Table */}
-          <Card className="glass luxury-panel border-[#2a2a2a] p-6 rounded-lg">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-sm font-semibold text-white">All Deal Scores</h3>
-              <div className="space-x-2">
-                <Button size="sm" variant="outline" className="text-[10px] border-white/20">
+          {/* All Deal Scores Table - Requirement 9: overflow-x-auto for tables */}
+          <Card className="glass luxury-panel border-[#2a2a2a] p-6 rounded-lg overflow-hidden">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-6 gap-4">
+              <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+                <BarChart className="w-4 h-4 text-primary" />
+                All Deal Scores
+              </h3>
+              <div className="flex gap-2 w-full sm:w-auto overflow-x-auto pb-1 sm:pb-0 scrollbar-hide">
+                <Button size="sm" variant="outline" className="text-[10px] border-white/20 whitespace-nowrap h-7">
                   High-Risk Filter
+                </Button>
+                <Button size="sm" variant="outline" className="text-[10px] border-white/20 whitespace-nowrap h-7">
+                  Export CSV
                 </Button>
               </div>
             </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+            
+            <div className="overflow-x-auto -mx-6 px-6">
+              <table className="w-full text-sm min-w-[500px]">
                 <thead>
                   <tr className="border-b border-white/10">
                     <th className="text-left py-2 px-3 text-xs font-semibold text-[#a3a3a3] uppercase">Deal</th>
-                    <th className="text-left py-2 px-3 text-xs font-semibold text-[#a3a3a3] uppercase">Health</th>
-                    <th className="text-left py-2 px-3 text-xs font-semibold text-[#a3a3a3] uppercase">Win Prob</th>
+                    <th className="text-center py-2 px-3 text-xs font-semibold text-[#a3a3a3] uppercase">Health</th>
+                    <th className="text-center py-2 px-3 text-xs font-semibold text-[#a3a3a3] uppercase">Win Prob</th>
                     <th className="text-left py-2 px-3 text-xs font-semibold text-[#a3a3a3] uppercase">Risk</th>
                     <th className="text-left py-2 px-3 text-xs font-semibold text-[#a3a3a3] uppercase">Stage</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {dealScores.map((deal: any, idx: number) => (
-                    <tr key={idx} className="border-b border-white/5 hover:bg-white/[0.02]">
-                      <td className="py-2 px-3 text-[#b3b3b3] font-medium">{deal.deal}</td>
-                      <td className="py-2 px-3">
-                        <Badge className={`text-[10px] ${deal.health >= 80 ? 'bg-success/10 text-success border-success/30' : 'bg-warning/10 text-warning border-warning/30'} border`}>
-                          {deal.health}%
+                  {dealScores.map((score: any, idx: number) => (
+                    <tr key={idx} className="border-b border-white/5 hover:bg-white/[0.02] transition-colors">
+                      <td className="py-3 px-3 text-white font-medium truncate max-w-[150px]">{score.deal}</td>
+                      <td className="py-3 px-3 text-center">
+                        <span className={`font-bold ${score.health >= 70 ? 'text-success' : score.health >= 40 ? 'text-warning' : 'text-red-500'}`}>
+                          {score.health}%
+                        </span>
+                      </td>
+                      <td className="py-3 px-3 text-center text-primary font-bold">{score.winProb}%</td>
+                      <td className="py-3 px-3">
+                        <Badge className={`${getRiskColor(score.risk)} border text-[10px]`}>
+                          {score.risk}
                         </Badge>
                       </td>
-                      <td className="py-2 px-3 text-[#b3b3b3]">{deal.winProb}%</td>
-                      <td className="py-2 px-3">
-                        <Badge className={`text-[10px] ${getRiskColor(deal.risk)} border`}>{deal.risk}</Badge>
-                      </td>
-                      <td className="py-2 px-3 text-[#888]">{deal.stage}</td>
+                      <td className="py-3 px-3 text-[#888] whitespace-nowrap">{score.stage}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -840,44 +847,47 @@ export function ComprehensiveAIWorkspace() {
               Generate Content
             </h3>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-6">
               <Button 
                 onClick={() => setSelectedContentType('followup')} 
-                className={`gap-2 ${selectedContentType === 'followup' ? 'bg-primary/20 border-primary/50' : 'bg-white/10 border-white/20'} hover:bg-white/20 text-white border h-12 justify-start`}
+                className={`gap-2 ${selectedContentType === 'followup' ? 'bg-primary/20 border-primary/50' : 'bg-white/10 border-white/20'} hover:bg-white/20 text-white border h-14 justify-start px-4`}
               >
                 <FileText className="w-4 h-4" />
                 <div className="text-left">
-                  <div className="text-xs font-semibold">Follow-up Email</div>
+                  <div className="text-xs font-bold uppercase tracking-tight">Follow-up</div>
                   <div className="text-[10px] text-[#888]">Gentle check-in</div>
                 </div>
               </Button>
               <Button 
                 onClick={() => setSelectedContentType('summary')} 
-                className={`gap-2 ${selectedContentType === 'summary' ? 'bg-primary/20 border-primary/50' : 'bg-white/10 border-white/20'} hover:bg-white/20 text-white border h-12 justify-start`}
+                className={`gap-2 ${selectedContentType === 'summary' ? 'bg-primary/20 border-primary/50' : 'bg-white/10 border-white/20'} hover:bg-white/20 text-white border h-14 justify-start px-4`}
               >
                 <FileText className="w-4 h-4" />
                 <div className="text-left">
-                  <div className="text-xs font-semibold">Meeting Summary</div>
+                  <div className="text-xs font-bold uppercase tracking-tight">Summary</div>
                   <div className="text-[10px] text-[#888]">Quick recap</div>
                 </div>
               </Button>
               <Button 
                 onClick={() => setSelectedContentType('proposal_draft')} 
-                className={`gap-2 ${selectedContentType === 'proposal_draft' ? 'bg-primary/20 border-primary/50' : 'bg-white/10 border-white/20'} hover:bg-white/20 text-white border h-14 justify-start`}
+                className={`gap-2 ${selectedContentType === 'proposal_draft' ? 'bg-primary/20 border-primary/50' : 'bg-white/10 border-white/20'} hover:bg-white/20 text-white border h-14 justify-start px-4`}
               >
                 <FileText className="w-4 h-4" />
                 <div className="text-left">
-                  <div className="text-xs font-semibold">Sales Proposal</div>
-                  <div className="text-[10px] text-[#888]">Full doc generation</div>
+                  <div className="text-xs font-bold uppercase tracking-tight">Proposal</div>
+                  <div className="text-[10px] text-[#888]">Full draft</div>
                 </div>
               </Button>
-              <Button 
-                onClick={generateEmailContent} 
-                className="bg-primary hover:bg-primary/90 text-white font-bold h-14"
-              >
-                Generate Agent Content
-              </Button>
             </div>
+
+            <Button 
+              onClick={generateEmailContent} 
+              disabled={generatingEmail}
+              className="w-full bg-primary hover:bg-primary/90 text-white font-bold h-12 mb-6 shadow-lg shadow-primary/20 transition-all active:scale-[0.98]"
+            >
+              {generatingEmail ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Brain className="w-4 h-4 mr-2" />}
+              Generate Intelligence Content
+            </Button>
 
             <div className="space-y-4">
               <div>
@@ -909,13 +919,13 @@ export function ComprehensiveAIWorkspace() {
                 )}
               </div>
 
-              <div className="flex gap-2">
-                <Button onClick={handleCopy} disabled={!generatedEmail} className={`flex-1 gap-2 ${copied ? 'bg-success/20 text-success' : 'bg-white/10 text-white hover:bg-white/20'} border border-white/20`}>
+              <div className="flex flex-col sm:flex-row gap-2">
+                <Button onClick={handleCopy} disabled={!generatedEmail} className={`w-full sm:flex-1 gap-2 ${copied ? 'bg-success/20 text-success' : 'bg-white/10 text-white hover:bg-white/20'} border border-white/20 h-10`}>
                   <Copy className="w-4 h-4" />
-                  {copied ? 'Copied!' : 'Copy Email'}
+                  {copied ? 'Copied Content' : 'Copy Response'}
                 </Button>
-                <Button onClick={() => generateEmailContent()} className="flex-1 gap-2 bg-white/10 hover:bg-white/20 text-white border border-white/20">
-                  <RefreshCw className="w-4 h-4" />
+                <Button onClick={() => generateEmailContent()} disabled={generatingEmail} className="w-full sm:flex-1 gap-2 bg-white/5 hover:bg-white/10 text-white border border-white/10 h-10">
+                  <RefreshCw className={`w-4 h-4 ${generatingEmail ? 'animate-spin' : ''}`} />
                   Regenerate
                 </Button>
               </div>
@@ -943,14 +953,14 @@ export function ComprehensiveAIWorkspace() {
                     <p className="text-sm text-[#b3b3b3]">
                       {strategyData?.recommendedNextAction || strategyData?.recommendation || "Analyzing latest deal signals to determine optimal next step..."}
                     </p>
-                    <div className="mt-4 flex gap-4">
-                       <div className="flex-1 p-3 rounded bg-black/20 border border-success/20">
-                         <p className="text-[10px] text-success/70 uppercase">Win Probability</p>
-                         <p className="text-xl font-bold text-success">{strategyData?.winProbability || strategyData?.healthScore || 0}%</p>
+                    <div className="mt-4 flex flex-col sm:flex-row gap-4">
+                       <div className="flex-1 p-3 rounded-lg bg-black/40 border border-success/20">
+                         <p className="text-[10px] text-success/70 uppercase font-bold tracking-tight">Win Probability</p>
+                         <p className="text-2xl font-bold text-success mt-1">{strategyData?.winProbability || strategyData?.healthScore || 0}%</p>
                        </div>
-                       <div className="flex-1 p-3 rounded bg-black/20 border border-success/20">
-                         <p className="text-[10px] text-success/70 uppercase">Health Grade</p>
-                         <p className="text-xl font-bold text-success">{strategyData?.healthGrade || 'B'}</p>
+                       <div className="flex-1 p-3 rounded-lg bg-black/40 border border-success/20">
+                         <p className="text-[10px] text-success/70 uppercase font-bold tracking-tight">Health Grade</p>
+                         <p className="text-2xl font-bold text-success mt-1">{strategyData?.healthGrade || 'B'}</p>
                        </div>
                     </div>
                     {!strategyData && !loadingStrategy && (

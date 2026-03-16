@@ -32,12 +32,13 @@ export function AIWorkspacePanel() {
   return (
     <div className="space-y-6">
       {/* Agent Status Cards */}
+      {/* Agent Status Cards - Requirement 10: 1/2/3 responsive grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {agents.map((agent) => (
-          <Card key={agent.name} className="glass luxury-panel border-[#2a2a2a] p-4 rounded-lg">
-            <div className="flex items-start justify-between mb-3">
-              <h3 className="text-sm font-semibold text-white">{agent.name}</h3>
-              <Badge className={`text-xs ${
+          <Card key={agent.name} className="glass luxury-panel border-[#2a2a2a] p-4 rounded-lg overflow-hidden">
+            <div className="flex items-start justify-between mb-3 gap-2">
+              <h3 className="text-sm font-semibold text-white truncate">{agent.name}</h3>
+              <Badge className={`text-xs flex-shrink-0 ${
                 agent.status === 'complete' ? 'bg-success/10 text-success border-success/30' :
                 agent.status === 'processing' ? 'bg-primary/10 text-primary border-primary/30' :
                 'bg-white/10 text-[#888] border-white/20'
@@ -47,8 +48,8 @@ export function AIWorkspacePanel() {
                 {agent.status.charAt(0).toUpperCase() + agent.status.slice(1)}
               </Badge>
             </div>
-            <p className="text-xs text-[#888] mb-2">{agent.description}</p>
-            <p className="text-xs text-[#666]">Last run: {agent.lastRun}</p>
+            <p className="text-xs text-[#888] mb-2 truncate max-w-full" title={agent.description}>{agent.description}</p>
+            <p className="text-[10px] text-[#666]">Last run: {agent.lastRun}</p>
           </Card>
         ))}
       </div>
@@ -104,25 +105,25 @@ export function AIWorkspacePanel() {
           </Card>
         </TabsContent>
 
-        {/* Generate Tab */}
+        {/* Generate Tab - Requirement 10: Full-width responsive buttons */}
         <TabsContent value="generate" className="space-y-4 mt-6">
           <Card className="glass luxury-panel border-[#2a2a2a] p-6 rounded-lg">
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-4">
-              <Button size="sm" className="bg-white/10 hover:bg-white/20 text-white border border-white/20">Email</Button>
-              <Button size="sm" className="bg-white/10 hover:bg-white/20 text-white border border-white/20">Proposal</Button>
-              <Button size="sm" className="bg-white/10 hover:bg-white/20 text-white border border-white/20">Summary</Button>
+              <Button size="sm" className="bg-white/10 hover:bg-white/20 text-white border border-white/20 h-9">Email</Button>
+              <Button size="sm" className="bg-white/10 hover:bg-white/20 text-white border border-white/20 h-9">Proposal</Button>
+              <Button size="sm" className="bg-white/10 hover:bg-white/20 text-white border border-white/20 h-9">Summary</Button>
             </div>
-            <div className="flex flex-col sm:flex-row gap-2">
-              <Button className="flex-1 gap-1 bg-primary hover:bg-primary/90 text-white" onClick={handleCopy}>
-                <Copy className="w-3 h-3" />
-                Copy Content
+            <div className="flex flex-col gap-2">
+              <Button className="w-full flex items-center justify-center gap-2 bg-primary hover:bg-primary/90 text-white font-bold h-10" onClick={handleCopy}>
+                <Copy className="w-4 h-4" />
+                <span>{copied ? 'Copied' : 'Copy Content'}</span>
               </Button>
-              <div className="flex gap-2">
-                <Button size="sm" className="flex-1 gap-1 bg-white/10 hover:bg-white/20 text-white border border-white/20">
-                  <RefreshCw className="w-3 h-3" />
+              <div className="grid grid-cols-2 gap-2">
+                <Button size="sm" className="bg-white/10 hover:bg-white/20 text-white border border-white/20 h-10 flex items-center justify-center">
+                  <RefreshCw className="w-4 h-4" />
                 </Button>
-                <Button size="sm" className="flex-1 gap-1 bg-white/10 hover:bg-white/20 text-white border border-white/20">
-                  <Save className="w-3 h-3" />
+                <Button size="sm" className="bg-white/10 hover:bg-white/20 text-white border border-white/20 h-10 flex items-center justify-center">
+                  <Save className="w-4 h-4" />
                 </Button>
               </div>
             </div>

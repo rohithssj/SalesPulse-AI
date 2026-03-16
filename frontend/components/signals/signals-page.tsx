@@ -242,9 +242,9 @@ export function SignalsPage() {
                   <div className="flex items-start gap-3">
                     <span className="text-2xl mt-1">{signal.icon}</span>
                     <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-2">
-                        <h4 className="text-sm font-semibold text-white">{signal.type || signal.signal}</h4>
-                        <Badge className={`text-[10px] ${getSeverityColor(signal.severity)} border`}>
+                      <div className="flex flex-wrap items-center gap-2 mb-2">
+                        <h4 className="text-sm font-semibold text-white truncate max-w-[150px]">{signal.type || signal.signal}</h4>
+                        <Badge className={`text-[10px] ${getSeverityColor(signal.severity)} border flex-shrink-0`}>
                           {signal.severity}
                         </Badge>
                       </div>

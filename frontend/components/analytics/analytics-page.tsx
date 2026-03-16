@@ -163,7 +163,7 @@ export function AnalyticsPage() {
       </div>
 
       {/* KPI Cards - Requirement 10: Standardized 1/2/3 grid pattern */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card className="glass luxury-panel border-[#2a2a2a] p-4 rounded-lg">
           <p className="text-xs text-[#888] uppercase tracking-wider mb-1">Total Pipeline</p>
           <p className="text-2xl font-bold text-white">{effectiveTotalPipeline}</p>
@@ -187,7 +187,8 @@ export function AnalyticsPage() {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-3 bg-[#0f0f0f] border border-[#2a2a2a] p-1 rounded-lg mb-6">
+        <div className="overflow-x-auto pb-2 custom-scrollbar">
+          <TabsList className="flex min-w-max bg-[#0f0f0f] border border-[#2a2a2a] p-1 rounded-lg mb-6">
           <TabsTrigger value="overview" className="text-xs font-semibold data-[state=active]:bg-white/10 data-[state=active]:text-white text-[#888]">
             Pipeline Overview
           </TabsTrigger>
@@ -197,7 +198,8 @@ export function AnalyticsPage() {
           <TabsTrigger value="accounts" className="text-xs font-semibold data-[state=active]:bg-white/10 data-[state=active]:text-white text-[#888]">
             Account Analysis
           </TabsTrigger>
-        </TabsList>
+          </TabsList>
+        </div>
 
         {/* Pipeline Overview Tab */}
         <TabsContent value="overview" className="space-y-6">

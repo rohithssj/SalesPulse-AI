@@ -148,17 +148,17 @@ export function DealCards() {
               </div>
             </div>
 
-            {/* Details Grid - Requirement 7: Standardized responsive grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 mb-4">
-              <div className="p-2.5 rounded-lg bg-white/5 border border-white/10">
-                <p className="text-[10px] text-muted-foreground uppercase mb-1">Value</p>
-                <p className="text-sm font-bold text-gradient-primary">${(deal.dealValue / 1000).toFixed(0)}K</p>
+            {/* Details Grid - Requirement 10: 1/2/4 responsive grid for details */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+              <div className="p-2.5 rounded-lg bg-white/5 border border-white/10 overflow-hidden">
+                <p className="text-[10px] text-muted-foreground uppercase mb-1 truncate">Value</p>
+                <p className="text-sm font-bold text-gradient-primary truncate">${(deal.dealValue / 1000).toFixed(0)}K</p>
               </div>
 
-              <div className="p-2.5 rounded-lg bg-white/5 border border-white/10">
-                <p className="text-[10px] text-muted-foreground uppercase mb-1">Stage</p>
-                <div className="flex">
-                  <span style={{
+              <div className="p-2.5 rounded-lg bg-white/5 border border-white/10 overflow-hidden">
+                <p className="text-[10px] text-muted-foreground uppercase mb-1 truncate">Stage</p>
+                <div className="flex truncate">
+                  <span className="truncate" style={{
                     backgroundColor: stageColor + '22',
                     color: stageColor,
                     border: `1px solid ${stageColor}`,
@@ -172,13 +172,13 @@ export function DealCards() {
                 </div>
               </div>
 
-              <div className="p-2.5 rounded-lg bg-white/5 border border-white/10">
-                <p className="text-[10px] text-muted-foreground uppercase mb-1">Due In</p>
-                <p className="text-sm font-bold" style={{ color: daysColor(daysLeft) }}>{daysLeft}d</p>
+              <div className="p-2.5 rounded-lg bg-white/5 border border-white/10 overflow-hidden">
+                <p className="text-[10px] text-muted-foreground uppercase mb-1 truncate">Due In</p>
+                <p className="text-sm font-bold truncate" style={{ color: daysColor(daysLeft) }}>{daysLeft}d</p>
               </div>
 
-              <div className="p-2.5 rounded-lg bg-white/5 border border-white/10">
-                <p className="text-[10px] text-muted-foreground uppercase mb-1">Contact</p>
+              <div className="p-2.5 rounded-lg bg-white/5 border border-white/10 overflow-hidden">
+                <p className="text-[10px] text-muted-foreground uppercase mb-1 truncate">Contact</p>
                 <p className="text-sm font-bold text-secondary truncate">{deal.contact || 'Main Contact'}</p>
               </div>
             </div>
@@ -201,24 +201,24 @@ export function DealCards() {
               </div>
             </div>
 
-            {/* Bottom Actions */}
-            <div className="mt-4 pt-4 border-t border-white/10 flex items-center gap-2">
+            {/* Bottom Actions - Requirement 10: Full-width responsive buttons */}
+            <div className="mt-4 pt-4 border-t border-white/10 flex flex-col sm:flex-row items-center gap-2">
               <button
                 type="button"
                 disabled={isEngaging}
                 onClick={() => handleEngage(deal)}
-                className="flex-1 flex items-center justify-center gap-2 px-3 py-2 text-xs font-medium rounded-lg bg-white/8 border border-white/15 hover:bg-white/12 hover:border-white/25 text-[#c7cfda] transition-colors disabled:opacity-50"
+                className="w-full sm:flex-1 flex items-center justify-center gap-2 px-3 py-2.5 text-xs font-bold rounded-lg bg-white/8 border border-white/15 hover:bg-white/12 hover:border-white/25 text-[#c7cfda] transition-all disabled:opacity-50"
               >
-                <Users className="w-3 h-3" />
+                <Users className="w-4 h-4" />
                 <span>{isEngaging ? '⟳ Generating...' : '👤 Engage'}</span>
               </button>
               <button
                 type="button"
                 onClick={() => handleAITips(deal)}
-                className="flex-1 flex items-center justify-center gap-2 px-3 py-2 text-xs font-medium rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 hover:border-white/20 text-[#b6aeca] transition-colors"
+                className="w-full sm:flex-1 flex items-center justify-center gap-2 px-3 py-2.5 text-xs font-bold rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 hover:border-white/20 text-[#b6aeca] transition-all"
                 style={{ color: showTips[deal.id] ? '#a78bfa' : '' }}
               >
-                <Zap className="w-3 h-3" />
+                <Zap className="w-4 h-4" />
                 <span>{loadingTips[deal.id] ? '⟳ Loading...' : showTips[deal.id] ? '✦ Hide Tips' : '✦ AI Tips'}</span>
               </button>
             </div>
