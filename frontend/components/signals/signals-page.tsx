@@ -8,7 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { Filter, Search, TrendingUp, AlertCircle, Mail, Calendar, Download, Loader2 } from 'lucide-react';
-import { fetchCompleteData, normalizeActivities, extractSignalsFromActivities } from '@/lib/api';
+import { fetchCompleteData, normalizeActivities, extractSignalsFromActivities, normalizeOpportunities } from '@/lib/api';
 
 // Signal types and data
 const signalTypes = ['All', 'Proposal Request', 'Email Engagement', 'Price Inquiry', 'Decision Signal', 'Budget Allocated', 'Meeting Scheduled'];
@@ -54,11 +54,12 @@ export function SignalsPage() {
   const { signals, timeline } = useMemo(() => {
     if (!data) return { signals: [], timeline: [] };
     const acts = normalizeActivities(data);
+    const opps = normalizeOpportunities(data);
     
-    // Use API signals if present, otherwise extract from activities
+    // Use API signals if present, otherwise extract from activities and opportunities
     let resolvedSignals = (data as any).signals && Array.isArray((data as any).signals) && (data as any).signals.length > 0 
       ? (data as any).signals 
-      : extractSignalsFromActivities(acts);
+      : extractSignalsFromActivities(acts, opps);
     
     // Provide some default dummy timeline if not present
     let resTimeline = [
@@ -112,7 +113,7 @@ export function SignalsPage() {
       </div>
 
       {/* Stats Overview */}
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card className="glass luxury-panel border-[#2a2a2a] p-4 rounded-lg">
           <p className="text-xs text-[#888] uppercase tracking-wider mb-1">Total Signals</p>
           <p className="text-2xl font-bold text-white">{signals.length}</p>
@@ -184,7 +185,7 @@ export function SignalsPage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="text-xs font-semibold text-[#a3a3a3] uppercase tracking-wider block mb-2">Severity</label>
                 <div className="flex flex-wrap gap-2">

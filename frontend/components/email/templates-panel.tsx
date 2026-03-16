@@ -6,7 +6,7 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { useAccount } from '@/context/account-context';
+import { useAccount } from '@/context/AccountContext';
 import { generateAIContent } from '@/lib/aiGenerator';
 import { GeneratedContentModal } from './generated-content-modal';
 import { useTemplates, EmailTemplate } from '@/hooks/use-templates';

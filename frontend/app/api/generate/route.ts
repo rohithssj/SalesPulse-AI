@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSalesforceAccessToken } from '@/lib/salesforce';
+import { sfClient } from '@/lib/salesforceClient';
 
 export async function POST(req: NextRequest) {
   try {
@@ -41,29 +41,19 @@ export async function POST(req: NextRequest) {
     }
 
     // ── Path 2: Salesforce strategy endpoint ──
-    const token = await getSalesforceAccessToken();
-    if (token) {
-      try {
-        const sfResponse = await fetch(`${APEX_BASE_URL}/strategy`, {
-          method: 'POST',
-          headers: {
-            Authorization:  `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            context,
-            accountId:  'CONTEXT_ONLY',
-            dataSource: 'context_only',
-          }),
-        });
-        
-        if (sfResponse.ok) {
-          const data = await sfResponse.json();
-          return NextResponse.json(data);
-        }
-      } catch (err: any) {
-        console.error('[API generate] Salesforce path error:', err.message);
+    try {
+      const sfResponse = await sfClient.post('/strategy', {
+        context,
+        accountId:  'CONTEXT_ONLY',
+        dataSource: 'context_only',
+      });
+      
+      if (sfResponse.ok) {
+        const data = await sfResponse.json();
+        return NextResponse.json(data);
       }
+    } catch (err: any) {
+      console.error('[API generate] Salesforce path error:', err.message);
     }
 
     // ── Path 3: Return structured fallback ──

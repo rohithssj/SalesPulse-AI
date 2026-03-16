@@ -22,9 +22,7 @@ export async function getSalesforceAccessToken(): Promise<string | null> {
 
   // 2. Validate environment variables
   if (!CLIENT_ID || !CLIENT_SECRET || !REFRESH_TOKEN) {
-    console.warn('[SALESFORCE AUTH] Missing OAuth credentials (CLIENT_ID, CLIENT_SECRET, or REFRESH_TOKEN)');
-    // Fallback to static token for backward compatibility in dev
-    return process.env.SALESFORCE_TOKEN || process.env.SF_ACCESS_TOKEN || null;
+    throw new Error('[SALESFORCE AUTH] Missing OAuth credentials (CLIENT_ID, CLIENT_SECRET, or REFRESH_TOKEN)');
   }
 
   console.log('[SALESFORCE AUTH] Requesting new access token...');
@@ -36,7 +34,6 @@ export async function getSalesforceAccessToken(): Promise<string | null> {
     params.append('client_secret', CLIENT_SECRET);
     params.append('refresh_token', REFRESH_TOKEN);
 
-    // Using standard fetch since we're in Next.js/Node environment
     const response = await fetch('https://login.salesforce.com/services/oauth2/token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -53,8 +50,6 @@ export async function getSalesforceAccessToken(): Promise<string | null> {
 
     // Cache the token
     cachedToken = access_token;
-    // OAuth tokens generally don't have an explicit 'expiry' in the response, 
-    // but they usually last 2 hours. We'll set a conservative 1-hour cache.
     tokenExpiry = Date.now() + (3600 * 1000);
 
     console.log('[SALESFORCE AUTH] Token refreshed successfully');
@@ -62,7 +57,15 @@ export async function getSalesforceAccessToken(): Promise<string | null> {
 
   } catch (error: any) {
     console.error('[SALESFORCE AUTH ERROR] Failed to refresh token:', error.message);
-    // Fallback to static token as last resort
-    return process.env.SALESFORCE_TOKEN || process.env.SF_ACCESS_TOKEN || null;
+    throw error;
   }
+}
+
+/**
+ * Force clears the cached token, usually called when a 401 is received.
+ */
+export function clearSalesforceCache() {
+  cachedToken = null;
+  tokenExpiry = 0;
+  console.log('[SALESFORCE AUTH] Token cache cleared');
 }

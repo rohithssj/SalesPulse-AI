@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { Zap, TrendingUp, FileText, Target, Copy, RefreshCw, Check, AlertCircle, Filter, Loader2, Brain } from 'lucide-react';
 import { fetchCompleteData, postEmail, postStrategy, fetchAccountBrief, postMeetingPrep, postProposal, normalizeOpportunities, normalizeActivities, normalizeTimeline, extractSignalsFromActivities, apiGet } from '@/lib/api';
-import { useAccount } from '@/context/account-context';
+import { useAccount } from '@/context/AccountContext';
 import { parseAnyResponse } from '@/lib/responseParser';
 import { 
   buildFollowUpContext, 
@@ -475,8 +475,12 @@ export function ComprehensiveAIWorkspace() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center p-12">
-        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      <div className="space-y-6 animate-pulse">
+        <div className="h-12 glass border border-[#2a2a2a] rounded-lg w-full bg-white/5" />
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="h-96 glass luxury-panel border-[#2a2a2a] rounded-lg bg-white/5" />
+          <div className="h-96 glass luxury-panel border-[#2a2a2a] rounded-lg bg-white/5" />
+        </div>
       </div>
     );
   }
@@ -484,7 +488,7 @@ export function ComprehensiveAIWorkspace() {
   return (
     <div className="space-y-6 animate-fade-up-soft">
       <Tabs defaultValue="intel" className="w-full">
-        <TabsList className="grid w-full grid-cols-4 bg-[#0f0f0f] border border-[#2a2a2a] p-1 rounded-lg mb-8">
+        <TabsList className="grid w-full grid-cols-2 md:grid-cols-4 bg-[#0f0f0f] border border-[#2a2a2a] p-1 rounded-lg mb-8">
           <TabsTrigger
             value="intel"
             className="text-xs font-semibold data-[state=active]:bg-white/10 data-[state=active]:text-white text-[#888]"
@@ -513,7 +517,7 @@ export function ComprehensiveAIWorkspace() {
 
         {/* Intel Tab */}
         <TabsContent value="intel" className="space-y-6">
-          <div className="grid grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Buying Signals List */}
             <Card className="glass luxury-panel border-[#2a2a2a] p-6 rounded-lg">
               <div className="flex items-center justify-between mb-4">
@@ -675,7 +679,7 @@ export function ComprehensiveAIWorkspace() {
                       </p>
                       {brief.contacts.map((c, i) => (
                         <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
-                          <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: '#4338ca', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: '11px', fontWeight: 700, flexShrink: 0 }}>
+                          <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: '#4338ca', display: 'flex', alignItems: 'center', justifySelf: 'center', color: '#fff', fontSize: '11px', fontWeight: 700, flexShrink: 0 }}>
                             {c.name?.split(' ').map((n: string) => n[0]).join('').substring(0, 2)}
                           </div>
                           <div>
@@ -717,7 +721,7 @@ export function ComprehensiveAIWorkspace() {
           {/* Engagement Insights */}
           <Card className="glass luxury-panel border-[#2a2a2a] p-6 rounded-lg">
             <h3 className="text-sm font-semibold text-white mb-4">Engagement Insights</h3>
-            <div className="grid grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               <div className="p-4 rounded-lg bg-white/[0.02] border border-white/10">
                 <p className="text-xs text-[#888] mb-2">Opportunities</p>
                 <p className="text-2xl font-bold text-primary">{normalizeOpportunities(data).length}</p>
@@ -746,7 +750,7 @@ export function ComprehensiveAIWorkspace() {
 
         {/* Score Tab */}
         <TabsContent value="score" className="space-y-6">
-          <div className="grid grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Deal Health Scores */}
             <Card className="glass luxury-panel border-[#2a2a2a] p-6 rounded-lg">
               <h3 className="text-sm font-semibold text-white mb-4">Deal Health Scores</h3>
@@ -836,7 +840,7 @@ export function ComprehensiveAIWorkspace() {
               Generate Content
             </h3>
 
-            <div className="grid grid-cols-2 gap-3 mb-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
               <Button 
                 onClick={() => setSelectedContentType('followup')} 
                 className={`gap-2 ${selectedContentType === 'followup' ? 'bg-primary/20 border-primary/50' : 'bg-white/10 border-white/20'} hover:bg-white/20 text-white border h-12 justify-start`}

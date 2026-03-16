@@ -13,7 +13,7 @@ import { SettingsSlider } from '@/components/settings/settings-slider';
 import { SettingsSelect } from '@/components/settings/settings-select';
 import { SectionHeader } from '@/components/settings/section-header';
 import { ComingSoonPanel } from '@/components/settings/coming-soon-panel';
-import { useAccount } from '@/context/account-context';
+import { useAccount } from '@/context/AccountContext';
 import { maskOrgUrl } from '@/utils/mask-credentials';
 
 const settingsSections = [

@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { fetchCompleteData } from '@/lib/api';
 import { generateAIContent } from '@/lib/aiGenerator';
-import { useAccount } from '@/context/account-context';
+import { useAccount } from '@/context/AccountContext';
 import { GeneratedContentModal } from './generated-content-modal';
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard';
 

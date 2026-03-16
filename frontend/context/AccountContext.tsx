@@ -12,6 +12,7 @@ interface Account {
 
 interface AccountContextType {
   accounts: Account[];
+  selectedAccount: Account | null;
   selectedAccountId: string;
   setSelectedAccountId: (id: string) => void;
   loading: boolean;
@@ -30,7 +31,7 @@ export function AccountProvider({ children }: { children: ReactNode }) {
         const data = await fetchAccounts();
         if (data && Array.isArray(data)) {
           setAccounts(data);
-          if (data.length > 0) {
+          if (data.length > 0 && !selectedAccountId) {
             setSelectedAccountId(data[0].Id);
           }
         }
@@ -41,10 +42,18 @@ export function AccountProvider({ children }: { children: ReactNode }) {
       }
     }
     loadAccounts();
-  }, []);
+  }, [selectedAccountId]);
+
+  const selectedAccount = accounts.find(a => a.Id === selectedAccountId) || accounts[0] || null;
 
   return (
-    <AccountContext.Provider value={{ accounts, selectedAccountId, setSelectedAccountId, loading }}>
+    <AccountContext.Provider value={{ 
+      accounts, 
+      selectedAccount,
+      selectedAccountId: selectedAccountId || (accounts[0]?.Id || ''), 
+      setSelectedAccountId, 
+      loading 
+    }}>
       {children}
     </AccountContext.Provider>
   );

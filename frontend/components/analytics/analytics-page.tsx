@@ -8,7 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { Calendar, Download, TrendingUp, Users, Mail, Target, Loader2 } from 'lucide-react';
 import { fetchCompleteData, normalizeOpportunities, normalizeActivities, buildPipelineData, buildHealthScoreData, buildTopAccounts } from '@/lib/api';
-import { useAccount } from '@/context/account-context';
+import { useAccount } from '@/context/AccountContext';
 import { useDataSource } from '@/context/DataSourceContext';
 import { useAnalyticsData } from '@/hooks/useAnalyticsData';
 
@@ -127,8 +127,17 @@ export function AnalyticsPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center p-12">
-        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      <div className="space-y-6 animate-pulse">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+          {[...Array(4)].map((_, i) => (
+            <div key={i} className="h-28 glass luxury-panel border-[#2a2a2a] rounded-lg bg-white/5" />
+          ))}
+        </div>
+        <div className="h-12 glass border border-[#2a2a2a] rounded-lg w-full bg-white/5" />
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="h-80 glass luxury-panel border-[#2a2a2a] rounded-lg bg-white/5" />
+          <div className="h-80 glass luxury-panel border-[#2a2a2a] rounded-lg bg-white/5" />
+        </div>
       </div>
     );
   }
@@ -153,8 +162,8 @@ export function AnalyticsPage() {
         </div>
       </div>
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-4 gap-4">
+      {/* KPI Cards - Requirement 10: Standardized 1/2/3 grid pattern */}
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
         <Card className="glass luxury-panel border-[#2a2a2a] p-4 rounded-lg">
           <p className="text-xs text-[#888] uppercase tracking-wider mb-1">Total Pipeline</p>
           <p className="text-2xl font-bold text-white">{effectiveTotalPipeline}</p>
@@ -192,7 +201,7 @@ export function AnalyticsPage() {
 
         {/* Pipeline Overview Tab */}
         <TabsContent value="overview" className="space-y-6">
-          <div className="grid grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Pipeline by Stage */}
             <Card className="glass luxury-panel border-[#2a2a2a] p-6 rounded-lg">
               <h3 className="text-sm font-semibold text-white mb-4">Pipeline by Stage</h3>
@@ -319,7 +328,7 @@ export function AnalyticsPage() {
           </Card>
 
           {/* Engagement Stats */}
-          <div className="grid grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <Card className="glass luxury-panel border-[#2a2a2a] p-4 rounded-lg">
               <p className="text-xs text-[#888] uppercase tracking-wider mb-2">{isUploadMode ? 'High Engagement Accounts' : 'Avg Opens/Week'}</p>
               <p className="text-2xl font-bold text-primary">
@@ -441,7 +450,7 @@ export function AnalyticsPage() {
           </Card>
 
           {/* Account Engagement Details */}
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             <Card className="glass luxury-panel border-[#2a2a2a] p-4 rounded-lg">
               <div className="flex items-center justify-between mb-2">
                 <p className="text-xs text-[#888] uppercase tracking-wider">Avg Engagement Score</p>
@@ -460,7 +469,7 @@ export function AnalyticsPage() {
             </Card>
             <Card className="glass luxury-panel border-[#2a2a2a] p-4 rounded-lg">
               <div className="flex items-center justify-between mb-2">
-                <p className="text-xs text-[#888] uppercase tracking-wider">Accounts in Active Deals</p>
+                <p className="text-xs text-[#888] uppercase tracking-wider">Active Deals</p>
                 <Users className="w-4 h-4 text-warning" />
               </div>
               <p className="text-2xl font-bold text-white">34</p>

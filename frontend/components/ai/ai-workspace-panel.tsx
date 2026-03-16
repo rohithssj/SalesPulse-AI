@@ -32,7 +32,7 @@ export function AIWorkspacePanel() {
   return (
     <div className="space-y-6">
       {/* Agent Status Cards */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {agents.map((agent) => (
           <Card key={agent.name} className="glass luxury-panel border-[#2a2a2a] p-4 rounded-lg">
             <div className="flex items-start justify-between mb-3">
@@ -55,7 +55,7 @@ export function AIWorkspacePanel() {
 
       {/* Workspace Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-4 bg-[#0f0f0f] border border-[#2a2a2a] p-1 rounded-lg">
+        <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 bg-[#0f0f0f] border border-[#2a2a2a] p-1 rounded-lg">
           <TabsTrigger value="intel" className="text-xs font-semibold data-[state=active]:bg-white/10 data-[state=active]:text-white text-[#888]">
             📊 Intel
           </TabsTrigger>
@@ -77,7 +77,7 @@ export function AIWorkspacePanel() {
               <Zap className="w-4 h-4 text-warning" />
               Buying Signals
             </h4>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               {['Proposal Interest', 'Budget Confirmed', 'Timeline Aligned', 'Decision Maker Engaged'].map((signal, i) => (
                 <Badge key={i} className="bg-success/10 text-success border-success/30 border justify-start">
                   ✓ {signal}
@@ -97,7 +97,7 @@ export function AIWorkspacePanel() {
             <div className="w-full bg-white/10 rounded-full h-3 mb-4">
               <div className="bg-primary h-3 rounded-full" style={{ width: '87%' }} />
             </div>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               <Badge className="bg-success/10 text-success border-success/30 border">Win: 85%</Badge>
               <Badge className="bg-warning/10 text-warning border-warning/30 border">Risk: Medium</Badge>
             </div>
@@ -107,22 +107,24 @@ export function AIWorkspacePanel() {
         {/* Generate Tab */}
         <TabsContent value="generate" className="space-y-4 mt-6">
           <Card className="glass luxury-panel border-[#2a2a2a] p-6 rounded-lg">
-            <div className="grid grid-cols-3 gap-2 mb-4">
-              <Button size="sm" className="bg-white/10 hover:bg-white/20 text-white border border-white/20">Follow-up Email</Button>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-4">
+              <Button size="sm" className="bg-white/10 hover:bg-white/20 text-white border border-white/20">Email</Button>
               <Button size="sm" className="bg-white/10 hover:bg-white/20 text-white border border-white/20">Proposal</Button>
               <Button size="sm" className="bg-white/10 hover:bg-white/20 text-white border border-white/20">Summary</Button>
             </div>
-            <div className="flex gap-2">
+            <div className="flex flex-col sm:flex-row gap-2">
               <Button className="flex-1 gap-1 bg-primary hover:bg-primary/90 text-white" onClick={handleCopy}>
                 <Copy className="w-3 h-3" />
-                Copy
+                Copy Content
               </Button>
-              <Button size="sm" className="gap-1 bg-white/10 hover:bg-white/20 text-white border border-white/20">
-                <RefreshCw className="w-3 h-3" />
-              </Button>
-              <Button size="sm" className="gap-1 bg-white/10 hover:bg-white/20 text-white border border-white/20">
-                <Save className="w-3 h-3" />
-              </Button>
+              <div className="flex gap-2">
+                <Button size="sm" className="flex-1 gap-1 bg-white/10 hover:bg-white/20 text-white border border-white/20">
+                  <RefreshCw className="w-3 h-3" />
+                </Button>
+                <Button size="sm" className="flex-1 gap-1 bg-white/10 hover:bg-white/20 text-white border border-white/20">
+                  <Save className="w-3 h-3" />
+                </Button>
+              </div>
             </div>
           </Card>
         </TabsContent>
@@ -136,7 +138,7 @@ export function AIWorkspacePanel() {
             </h4>
             <div className="space-y-2">
               {['Send custom proposal', 'Schedule executive meeting', 'Add to closing checklist'].map((action, i) => (
-                <Badge key={i} className="bg-success/10 text-success border-success/30 border justify-start">
+                <Badge key={i} className="bg-success/10 text-success border-success/30 border justify-start h-auto py-2 whitespace-normal">
                   {i + 1}. {action}
                 </Badge>
               ))}

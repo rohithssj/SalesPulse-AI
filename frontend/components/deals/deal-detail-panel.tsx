@@ -9,7 +9,7 @@ import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { Mail, Phone, Calendar, User, TrendingUp, AlertCircle, Zap, FileText, MessageSquare, Plus, Share2, Copy, Check, X } from 'lucide-react';
 import { generateAIContent } from '@/lib/aiGenerator';
-import { useAccount } from '@/context/account-context';
+import { useAccount } from '@/context/AccountContext';
 import { useDataSource } from '@/context/DataSourceContext';
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard';
 import { parseAnyResponse } from '@/lib/responseParser';

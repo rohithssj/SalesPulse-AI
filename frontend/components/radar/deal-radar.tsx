@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { fetchCompleteData, normalizeOpportunities } from '@/lib/api';
-import { useAccount } from '@/context/account-context';
+import { useAccount } from '@/context/AccountContext';
 import { Loader2 } from 'lucide-react';
 import { getDealColor } from '@/lib/deal-colors';
 

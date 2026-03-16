@@ -5,7 +5,7 @@ import { Mail, AlertCircle, CheckCircle2, Loader2 } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { useAccount } from '@/context/account-context';
+import { useAccount } from '@/context/AccountContext';
 import { fetchCompleteData } from '@/lib/api';
 import { generateAIContent } from '@/lib/aiGenerator';
 import { usePageData } from '@/hooks/usePageData';

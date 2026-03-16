@@ -23,7 +23,7 @@ export default function RadarPage() {
       {/* Ambient glow */}
       <div className="fixed top-1/3 right-0 w-[600px] h-[600px] rounded-full bg-primary/6 blur-[140px] pointer-events-none lux-orb" />
 
-      <div className="relative z-10 max-w-screen-2xl mx-auto px-8 py-10">
+      <div className="relative z-10 max-w-screen-2xl mx-auto px-4 sm:px-8 py-8 md:py-12">
 
         {/* Page Header */}
         <div className="mb-10 animate-fade-up-soft">
@@ -33,10 +33,10 @@ export default function RadarPage() {
             </div>
             <span className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Live Tracking</span>
           </div>
-          <h1 className="text-5xl font-bold tracking-tight mb-3">
+          <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight mb-3">
             <span className="bg-gradient-to-r from-primary to-primary-light bg-clip-text text-transparent">Deal Radar</span>
           </h1>
-          <p className="text-base text-muted-foreground max-w-xl">
+          <p className="text-sm sm:text-base text-muted-foreground max-w-xl">
             Real-time pipeline visualization with AI-powered deal health scoring. See where every deal stands at a glance.
           </p>
         </div>
@@ -46,12 +46,12 @@ export default function RadarPage() {
           <StatsBar />
         </div>
 
-        {/* Main Grid */}
-        <div className="grid grid-cols-3 gap-6 mb-8 animate-fade-up-soft" style={{ animationDelay: '0.16s' }}>
-          <div className="col-span-2 min-h-[460px] lift-hover">
+        {/* Main Grid - Standardized 3-state responsiveness */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8 animate-fade-up-soft" style={{ animationDelay: '0.16s' }}>
+          <div className="md:col-span-2 lg:col-span-2 min-h-[300px] sm:min-h-[460px] lift-hover">
             <DealRadar />
           </div>
-          <div className="lift-hover">
+          <div className="md:col-span-1 lg:col-span-1 lift-hover">
             <DealAlerts />
           </div>
         </div>

@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { Copy, RotateCw, WandIcon, Download, Save, Loader2 } from 'lucide-react';
 import { fetchAccountBrief } from '@/lib/api';
 import { generateAIContent, GenerationType } from '@/lib/aiGenerator';
-import { useAccount } from '@/context/account-context';
+import { useAccount } from '@/context/AccountContext';
 import { useDataSource } from '@/context/DataSourceContext';
 import { GeneratedContentModal } from './generated-content-modal';
 import { Card } from '@/components/ui/card';

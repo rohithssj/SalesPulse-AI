@@ -3,7 +3,7 @@ import { Inter } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
 import { Sidebar } from '@/components/layout/sidebar'
 import { NotificationCenter } from '@/components/layout/notification-center-enhanced'
-import { AccountProvider } from '@/context/account-context'
+import { AccountProvider } from '@/context/AccountContext'
 import { DataSourceProvider } from '@/context/DataSourceContext'
 import './globals.css'
 
@@ -28,7 +28,7 @@ export default function RootLayout({
         <DataSourceProvider>
           <AccountProvider>
             <Sidebar />
-            <main className="ml-64 min-h-screen px-8 py-8">
+            <main className="md:ml-20 lg:ml-64 min-h-screen px-4 sm:px-8 py-20 lg:py-8 transition-all duration-300">
               {children}
             </main>
             <NotificationCenter />

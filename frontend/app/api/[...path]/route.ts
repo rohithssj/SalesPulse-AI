@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSalesforceAccessToken } from '@/lib/salesforce';
+import { salesforceRequest } from '@/lib/salesforceClient';
 
 /**
- * Catch-all route for other Salesforce API actions (email, proposal, etc.)
+ * Catch-all route for other Salesforce API actions (email, proposal, accountBrief, etc.)
  */
 export async function GET(req: NextRequest, { params }: { params: Promise<{ path: string[] }> }) {
   const { path } = await params;
@@ -18,18 +18,13 @@ async function handleRequest(req: NextRequest, pathSegments: string[]) {
   const action = pathSegments[pathSegments.length - 1];
   const { searchParams } = new URL(req.url);
   
-  const INSTANCE_URL = process.env.SALESFORCE_INSTANCE_URL || process.env.INSTANCE_URL || process.env.REACT_APP_SF_ORG_URL;
-  const APEX_BASE_URL = `${INSTANCE_URL}/services/apexrest/salesforge`;
-
   try {
-    const token = await getSalesforceAccessToken();
-    if (!token) {
-      return NextResponse.json({ error: 'Unauthorized: Missing Salesforce token' }, { status: 401 });
-    }
+    const targetParams: Record<string, string> = {};
+    searchParams.forEach((value, key) => {
+      targetParams[key] = value;
+    });
 
-    // Clone search params to forward them
-    const targetParams = new URLSearchParams(searchParams);
-    let accountId = targetParams.get('accountId');
+    let accountId = targetParams.accountId;
 
     // Parse body for accountId if it's a POST
     let body: any = null;
@@ -44,45 +39,24 @@ async function handleRequest(req: NextRequest, pathSegments: string[]) {
       }
     }
 
-    // If accountId is still missing and this isn't the accounts endpoint, try to find a default
+    // Requirement 3: Strictly return 400 if accountId is missing (except for 'accounts' listing)
     if (!accountId && action !== 'accounts') {
-      const accountsRes = await fetch(`${APEX_BASE_URL}/accounts`, {
-        headers: { 'Authorization': `Bearer ${token}` }
+      return NextResponse.json({ error: 'Missing accountId' }, { status: 400 });
+    }
+
+    let data: any;
+    if (req.method === 'POST') {
+      data = await salesforceRequest(`/${action}`, { 
+        method: 'POST',
+        body: JSON.stringify({ ...body, accountId }) 
       });
-      if (accountsRes.ok) {
-        const accounts = await accountsRes.json();
-        if (accounts && accounts.length > 0) {
-          accountId = accounts[0].Id;
-          if (accountId) {
-            targetParams.set('accountId', accountId);
-          }
-        }
-      }
+    } else {
+      // For GET, ensure accountId is in targetParams if it's not 'accounts'
+      if (accountId) targetParams.accountId = accountId;
+      data = await salesforceRequest(`/${action}`, { params: targetParams });
     }
 
-    const targetUrl = new URL(`${APEX_BASE_URL}/${action}`);
-    if (accountId) {
-      targetUrl.searchParams.set('accountId', accountId);
-    }
-    
-    // Forward other query params except accountId (since we just set/overrode it)
-    searchParams.forEach((value, key) => {
-      if (key !== 'accountId') {
-        targetUrl.searchParams.append(key, value);
-      }
-    });
-
-    const response = await fetch(targetUrl.toString(), {
-      method: req.method,
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      },
-      body: body ? JSON.stringify(body) : undefined
-    });
-
-    const data = await response.json().catch(() => ({}));
-    return NextResponse.json(data, { status: response.status });
+    return NextResponse.json(data || {});
 
   } catch (error: any) {
     console.error(`[API ${action}] Error:`, error.message);

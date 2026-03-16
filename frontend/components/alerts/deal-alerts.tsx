@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { AlertCircle, TrendingUp, Clock, Zap, Loader2 } from 'lucide-react';
-import { useAccount } from '@/context/account-context';
+import { useAccount } from '@/context/AccountContext';
 import { fetchCompleteData, normalizeOpportunities } from '@/lib/api';
 
 export function DealAlerts() {

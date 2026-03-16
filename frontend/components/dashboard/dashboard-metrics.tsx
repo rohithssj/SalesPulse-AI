@@ -7,21 +7,26 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { fetchCompleteData, normalizeOpportunities, buildPipelineData, buildHealthScoreData, buildTopAccounts } from '@/lib/api';
-import { useAccount } from '@/context/account-context';
+import { useAccount } from '@/context/AccountContext';
+import { useDataSource } from '@/context/DataSourceContext';
 
 export function DashboardMetrics() {
   const { selectedAccountId } = useAccount();
-  const [data, setData] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+  const { isUploadMode, globalData, selectedAccount } = useDataSource();
+  const [sfData, setSfData] = useState<any>(null);
+  const [loadingSf, setLoadingSf] = useState(false);
 
   useEffect(() => {
-    if (!selectedAccountId) return;
-    setLoading(true);
+    if (isUploadMode || !selectedAccountId) return;
+    setLoadingSf(true);
     fetchCompleteData(selectedAccountId).then((res) => {
-      setData(res || {});
-      setLoading(false);
+      setSfData(res || {});
+      setLoadingSf(false);
     });
-  }, [selectedAccountId]);
+  }, [selectedAccountId, isUploadMode]);
+
+  const data = isUploadMode ? globalData : sfData;
+  const loading = isUploadMode ? false : loadingSf;
 
   const { pipelineData, healthScoreData, topAccounts, activeDealsCount, totalPipelineValue, avgHealthScore } = useMemo(() => {
     if (!data) return {
@@ -29,7 +34,12 @@ export function DashboardMetrics() {
       activeDealsCount: 0, totalPipelineValue: 0, avgHealthScore: 0
     };
 
-    const opps = normalizeOpportunities(data);
+    let opps = normalizeOpportunities(data);
+
+    // Filter by selected account if in upload mode and one is selected
+    if (isUploadMode && selectedAccount) {
+      opps = opps.filter(o => o.accountId === selectedAccount.id || o.accountName === selectedAccount.name);
+    }
     const pData = buildPipelineData(opps);
     const hData = buildHealthScoreData(opps);
     const tAccts = buildTopAccounts(opps);
@@ -76,80 +86,89 @@ export function DashboardMetrics() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center p-12">
-        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      <div className="space-y-6 animate-pulse">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4">
+          {[...Array(6)].map((_, i) => (
+            <div key={i} className="h-24 glass luxury-panel border-[#2a2a2a] rounded-lg bg-white/5" />
+          ))}
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="h-64 glass luxury-panel border-[#2a2a2a] rounded-lg bg-white/5" />
+          <div className="h-64 glass luxury-panel border-[#2a2a2a] rounded-lg bg-white/5" />
+          <div className="h-64 glass luxury-panel border-[#2a2a2a] rounded-lg bg-white/0.02 border-dashed" />
+        </div>
       </div>
     );
   }
 
   return (
     <div className="space-y-6 animate-fade-up-soft">
-      {/* KPI Grid */}
-      <div className="grid grid-cols-6 gap-4">
+      {/* KPI Grid - Requirement 10: 1/2/4/6 responsive grid */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
         <Card className="glass luxury-panel border-[#2a2a2a] p-4 rounded-lg">
           <p className="text-xs text-[#888] font-medium uppercase tracking-wider">Pipeline Value</p>
           <div className="text-2xl font-bold text-primary mt-2">${(totalPipelineValue / 1000).toFixed(1)}K</div>
-          <p className="text-xs text-success mt-1">↑ 12% from last week</p>
+          <p className="text-[10px] text-success mt-1">↑ 12%</p>
         </Card>
 
         <Card className="glass luxury-panel border-[#2a2a2a] p-4 rounded-lg">
           <p className="text-xs text-[#888] font-medium uppercase tracking-wider">Active Deals</p>
           <div className="text-2xl font-bold text-secondary mt-2">{activeDealsCount}</div>
-          <p className="text-xs text-success mt-1">↑ 3 new this week</p>
+          <p className="text-[10px] text-success mt-1">↑ 3 new</p>
         </Card>
 
         <Card className="glass luxury-panel border-[#2a2a2a] p-4 rounded-lg">
           <p className="text-xs text-[#888] font-medium uppercase tracking-wider">Buying Signals</p>
           <div className="text-2xl font-bold text-warning mt-2">{buyingSignalsDetected}</div>
-          <p className="text-xs text-warning mt-1">🔥 Requires action</p>
+          <p className="text-[10px] text-warning mt-1">🔥 Action</p>
         </Card>
 
         <Card className="glass luxury-panel border-[#2a2a2a] p-4 rounded-lg">
-          <p className="text-xs text-[#888] font-medium uppercase tracking-wider">Avg Deal Health</p>
+          <p className="text-xs text-[#888] font-medium uppercase tracking-wider">Avg Health</p>
           <div className="text-2xl font-bold text-success mt-2">{avgHealthScore}%</div>
-          <p className="text-xs text-success mt-1">Portfolio strong</p>
+          <p className="text-[10px] text-success mt-1">Strong</p>
         </Card>
 
         <Card className="glass luxury-panel border-[#2a2a2a] p-4 rounded-lg">
-          <p className="text-xs text-[#888] font-medium uppercase tracking-wider">High-Risk Deals</p>
+          <p className="text-xs text-[#888] font-medium uppercase tracking-wider">High-Risk</p>
           <div className="text-2xl font-bold text-red-500 mt-2">{highRiskDeals}</div>
           <Badge className="mt-2 bg-red-500/10 text-red-500 border-red-500/30 text-[10px] border">
-            ⚠️ Monitor Closely
+            ⚠️ Monitor
           </Badge>
         </Card>
 
         <Card className="glass luxury-panel border-[#2a2a2a] p-4 rounded-lg">
-          <p className="text-xs text-[#888] font-medium uppercase tracking-wider">Follow-up Queue</p>
+          <p className="text-xs text-[#888] font-medium uppercase tracking-wider">Queue</p>
           <div className="text-2xl font-bold text-primary mt-2">{dealsNeedingFollowUp}</div>
-          <Button size="sm" className="mt-2 h-6 text-[10px] gap-1 bg-primary/20 hover:bg-primary/30 text-primary border border-primary/30">
+          <Button size="sm" className="mt-2 h-6 text-[10px] gap-1 bg-primary/20 hover:bg-primary/30 text-primary border border-primary/30 w-full">
             <Mail className="w-3 h-3" />
-            Generate
+            Gen
           </Button>
         </Card>
       </div>
 
-      {/* Charts Section */}
-      <div className="grid grid-cols-2 gap-6">
+      {/* Main Dashboard Layout - Requirements 7: 1/2/3 grid layout */}
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
         {/* Pipeline Stage Distribution */}
-        <Card className="glass luxury-panel border-[#2a2a2a] p-6 rounded-lg">
+        <Card className="glass luxury-panel border-[#2a2a2a] p-4 md:p-6 rounded-lg">
           <h3 className="text-sm font-semibold text-white mb-4">Pipeline Stage Distribution</h3>
-          <div className="h-64">
+          <div className="h-48 md:h-64">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={pipelineData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#2a2a2a" />
-                <XAxis dataKey="stage" stroke="#666" fontSize={12} />
-                <YAxis stroke="#666" />
+                <XAxis dataKey="stage" stroke="#666" fontSize={10} />
+                <YAxis stroke="#666" fontSize={10} />
                 <Tooltip contentStyle={{ backgroundColor: '#1a1a1a', border: '1px solid #2a2a2a', borderRadius: '8px' }} />
-                <Bar dataKey="count" fill="#8fb39a" radius={[8, 8, 0, 0]} />
+                <Bar dataKey="count" fill="#8fb39a" radius={[6, 6, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
         </Card>
 
         {/* Deal Health Score Distribution */}
-        <Card className="glass luxury-panel border-[#2a2a2a] p-6 rounded-lg">
+        <Card className="glass luxury-panel border-[#2a2a2a] p-4 md:p-6 rounded-lg">
           <h3 className="text-sm font-semibold text-white mb-4">Deal Health Distribution</h3>
-          <div className="h-64">
+          <div className="h-48 md:h-64">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie
@@ -158,9 +177,10 @@ export function DashboardMetrics() {
                   cy="50%"
                   labelLine={false}
                   label={({ range, count }) => `${range}: ${count}`}
-                  outerRadius={80}
+                  outerRadius={70}
                   fill="#8884d8"
                   dataKey="count"
+                  fontSize={10}
                 >
                   {COLORS.map((color, index) => (
                     <Cell key={`cell-${index}`} fill={color} />
@@ -174,14 +194,14 @@ export function DashboardMetrics() {
       </div>
 
       {/* Signals Over Time */}
-      <Card className="glass luxury-panel border-[#2a2a2a] p-6 rounded-lg">
+      <Card className="glass luxury-panel border-[#2a2a2a] p-4 md:p-6 rounded-lg">
         <h3 className="text-sm font-semibold text-white mb-4">Buying Signals Trend (7 Days)</h3>
-        <div className="h-64">
+        <div className="h-48 md:h-64">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={signalsOverTime}>
               <CartesianGrid strokeDasharray="3 3" stroke="#2a2a2a" />
-              <XAxis dataKey="date" stroke="#666" />
-              <YAxis stroke="#666" />
+              <XAxis dataKey="date" stroke="#666" fontSize={10} />
+              <YAxis stroke="#666" fontSize={10} />
               <Tooltip contentStyle={{ backgroundColor: '#1a1a1a', border: '1px solid #2a2a2a', borderRadius: '8px' }} />
               <Line type="monotone" dataKey="signals" stroke="#f97316" strokeWidth={2} dot={{ fill: '#f97316', r: 4 }} />
             </LineChart>
@@ -220,20 +240,27 @@ export function DashboardMetrics() {
           Recent Signals Activity
         </h3>
         <div className="space-y-2">
-          {recentSignals.map((item: any, idx: number) => (
-            <div key={idx} className="flex items-start justify-between p-3 rounded-lg hover:bg-white/[0.02] transition-colors">
-              <div className="flex items-start gap-3 flex-1">
-                <Zap className="w-4 h-4 text-warning flex-shrink-0 mt-0.5" />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-white">{item.signal}</p>
-                  <p className="text-xs text-[#888]">{item.account} • {item.time}</p>
+          {recentSignals.length > 0 ? (
+            recentSignals.map((item: any, idx: number) => (
+              <div key={idx} className="flex items-start justify-between p-3 rounded-lg hover:bg-white/[0.02] transition-colors">
+                <div className="flex items-start gap-3 flex-1">
+                  <Zap className="w-4 h-4 text-warning flex-shrink-0 mt-0.5" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-white">{item.signal}</p>
+                    <p className="text-xs text-[#888]">{item.account} • {item.time}</p>
+                  </div>
                 </div>
+                <Badge className="text-[10px] bg-warning/10 text-warning border-warning/30 border flex-shrink-0">
+                  {item.confidence}%
+                </Badge>
               </div>
-              <Badge className="text-[10px] bg-warning/10 text-warning border-warning/30 border flex-shrink-0">
-                {item.confidence}%
-              </Badge>
+            ))
+          ) : (
+            <div className="flex flex-col items-center justify-center p-8 text-center border border-dashed border-white/10 rounded-lg">
+              <Zap className="w-8 h-8 text-white/10 mb-2" />
+              <p className="text-xs text-[#666]">No buying signals detected for this account yet.</p>
             </div>
-          ))}
+          )}
         </div>
       </Card>
     </div>

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { TrendingUp, Users, Calendar, Zap, Loader2, Copy, X } from 'lucide-react';
-import { useAccount } from '@/context/account-context';
+import { useAccount } from '@/context/AccountContext';
 import { fetchCompleteData, normalizeOpportunities } from '@/lib/api';
 import { generateAIContent } from '@/lib/aiGenerator';
 import { getDealColor, getStageBorderColor } from '@/lib/deal-colors';
@@ -111,8 +111,10 @@ export function DealCards() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center p-12 glass rounded-lg border border-white/10">
-        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      <div className="space-y-4 animate-pulse">
+        {[...Array(3)].map((_, i) => (
+          <div key={i} className="h-48 glass rounded-lg border border-white/10 bg-white/5" />
+        ))}
       </div>
     );
   }
@@ -146,15 +148,15 @@ export function DealCards() {
               </div>
             </div>
 
-            {/* Details Grid */}
-            <div className="grid grid-cols-4 gap-3 mb-4">
+            {/* Details Grid - Requirement 7: Standardized responsive grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 mb-4">
               <div className="p-2.5 rounded-lg bg-white/5 border border-white/10">
-                <p className="text-xs text-muted-foreground mb-1">Value</p>
+                <p className="text-[10px] text-muted-foreground uppercase mb-1">Value</p>
                 <p className="text-sm font-bold text-gradient-primary">${(deal.dealValue / 1000).toFixed(0)}K</p>
               </div>
 
               <div className="p-2.5 rounded-lg bg-white/5 border border-white/10">
-                <p className="text-xs text-muted-foreground mb-1">Stage</p>
+                <p className="text-[10px] text-muted-foreground uppercase mb-1">Stage</p>
                 <div className="flex">
                   <span style={{
                     backgroundColor: stageColor + '22',
@@ -171,12 +173,12 @@ export function DealCards() {
               </div>
 
               <div className="p-2.5 rounded-lg bg-white/5 border border-white/10">
-                <p className="text-xs text-muted-foreground mb-1">Due In</p>
+                <p className="text-[10px] text-muted-foreground uppercase mb-1">Due In</p>
                 <p className="text-sm font-bold" style={{ color: daysColor(daysLeft) }}>{daysLeft}d</p>
               </div>
 
               <div className="p-2.5 rounded-lg bg-white/5 border border-white/10">
-                <p className="text-xs text-muted-foreground mb-1">Contact</p>
+                <p className="text-[10px] text-muted-foreground uppercase mb-1">Contact</p>
                 <p className="text-sm font-bold text-secondary truncate">{deal.contact || 'Main Contact'}</p>
               </div>
             </div>

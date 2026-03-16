@@ -83,33 +83,33 @@ export default function Home() {
       <div className="fixed top-1/4 right-1/4 w-[520px] h-[520px] rounded-full bg-white/[0.05] blur-[130px] pointer-events-none lux-orb" />
       <div className="fixed bottom-1/3 left-1/4 w-[420px] h-[420px] rounded-full bg-white/[0.04] blur-[110px] pointer-events-none lux-orb" style={{ animationDelay: '1.8s' }} />
 
-      <div className="relative z-10 max-w-screen-2xl mx-auto px-8 py-12">
+      <div className="relative z-10 max-w-screen-2xl mx-auto px-4 sm:px-8 py-8 md:py-12">
 
         {/* Hero Section */}
-        <div className="mb-16 max-w-3xl animate-fade-up-soft">
+        <div className="mb-12 md:mb-16 max-w-3xl animate-fade-up-soft">
           <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/5 border border-white/10 mb-6 animate-float-slow">
             <div className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
-            <span className="text-xs font-medium text-[#b3b3b3]">Ranked #1 AI sales platform for modern teams</span>
+            <span className="text-[10px] sm:text-xs font-medium text-[#b3b3b3]">Ranked #1 AI sales platform for modern teams</span>
           </div>
-          <h1 className="text-6xl font-bold leading-[1.05] tracking-tight mb-6 text-white animate-fade-up-soft" style={{ animationDelay: '0.08s' }}>
+          <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold leading-[1.1] md:leading-[1.05] tracking-tight mb-6 text-white animate-fade-up-soft" style={{ animationDelay: '0.08s' }}>
             Sales intelligence,
             <br />
             <span className="display-italic text-white/95">without</span> the guesswork.
           </h1>
-          <p className="text-lg text-[#a3a3a3] leading-relaxed max-w-xl animate-fade-up-soft" style={{ animationDelay: '0.16s' }}>
+          <p className="text-base sm:text-lg text-[#a3a3a3] leading-relaxed max-w-xl animate-fade-up-soft" style={{ animationDelay: '0.16s' }}>
             AI-powered deal management that tracks your pipeline in real time, scores opportunities, and tells you exactly where to focus.
           </p>
-          <div className="flex items-center gap-4 mt-8 animate-fade-up-soft" style={{ animationDelay: '0.24s' }}>
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 mt-8 animate-fade-up-soft" style={{ animationDelay: '0.24s' }}>
             <Link
               href="/radar"
-              className="flex items-center gap-2 px-6 py-3 rounded-xl bg-white text-black font-semibold text-sm hover:bg-white/90 transition-colors lift-hover luxury-button"
+              className="flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-white text-black font-semibold text-sm hover:bg-white/90 transition-colors lift-hover luxury-button w-full sm:w-auto"
             >
               Open Command Center
               <ArrowRight className="w-4 h-4" />
             </Link>
             <Link
               href="/analytics"
-              className="flex items-center gap-2 px-6 py-3 rounded-xl bg-white/5 border border-white/10 text-white font-semibold text-sm hover:bg-white/10 transition-colors lift-hover luxury-button"
+              className="flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-white/5 border border-white/10 text-white font-semibold text-sm hover:bg-white/10 transition-colors lift-hover luxury-button w-full sm:w-auto"
             >
               View Analytics
             </Link>
@@ -125,7 +125,7 @@ export default function Home() {
         <div className="mb-12">
           <h2 className="text-xl font-bold text-white mb-2">Command Center</h2>
           <p className="text-sm text-[#888] mb-6">Navigate to any module below</p>
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {sections.map((section, idx) => (
               <Link
                 key={section.href}
@@ -159,8 +159,8 @@ export default function Home() {
         </div>
 
         {/* Bottom Section: Alerts + Activity */}
-        <div className="grid grid-cols-3 gap-6 mb-12">
-          <div className="col-span-2">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-12">
+          <div className="md:col-span-1 lg:col-span-2">
             <h2 className="text-xl font-bold text-white mb-2">Live Alerts</h2>
             <p className="text-sm text-[#888] mb-4">Real-time deal intelligence notifications</p>
             <DealAlerts />

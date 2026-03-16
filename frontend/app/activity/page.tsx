@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { AlertCircle, CheckCircle, Mail, Zap, TrendingUp, Users, Clock, Filter, Archive, Trash2, Loader2 } from 'lucide-react';
 import { fetchCompleteData, normalizeActivities } from '@/lib/api';
-import { useAccount } from '@/context/account-context';
+import { useAccount } from '@/context/AccountContext';
 
 interface Activity {
   id: string;
@@ -130,8 +130,8 @@ export default function ActivityPage() {
           <p className="text-sm text-[#888]">Real-time activity feed across all deals, signals, and communications</p>
         </div>
 
-        {/* Stats Cards */}
-        <div className="grid grid-cols-4 gap-4 mb-8">
+        {/* Stats Cards - Standardized 3-state responsiveness */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-8">
           <Card className="glass luxury-panel border-[#2a2a2a] p-4 rounded-lg">
             <p className="text-xs text-[#888] mb-1">Total Activities</p>
             <p className="text-2xl font-bold text-white">{activities.length}</p>
@@ -156,9 +156,9 @@ export default function ActivityPage() {
           </Card>
         </div>
 
-        {/* Filters */}
+        {/* Filters - Standardized 3-state responsiveness */}
         <Card className="glass luxury-panel border-[#2a2a2a] p-6 rounded-lg mb-6">
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {/* Search */}
             <div>
               <label className="text-xs font-semibold text-[#a3a3a3] uppercase tracking-wider block mb-2">
@@ -212,8 +212,10 @@ export default function ActivityPage() {
         {/* Activity List */}
         <div className="space-y-3">
           {loading ? (
-            <div className="flex justify-center items-center py-20">
-              <Loader2 className="w-8 h-8 animate-spin text-primary" />
+            <div className="space-y-4 animate-pulse">
+              {[...Array(6)].map((_, i) => (
+                <div key={i} className="h-24 glass border-[#2a2a2a] rounded-lg bg-white/5" />
+              ))}
             </div>
           ) : filteredActivities.length > 0 ? (
             filteredActivities.map((activity) => {

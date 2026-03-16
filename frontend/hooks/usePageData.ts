@@ -1,6 +1,7 @@
 'use client';
 
 import { useDataSource } from '@/context/DataSourceContext';
+import { useAccount } from '@/context/AccountContext';
 import { apiGet } from '@/lib/api';
 import { useState, useEffect, useRef } from 'react';
 
@@ -12,14 +13,31 @@ export function usePageData<T>(
   deps: unknown[] = []
 ) {
   const dataSource = useDataSource();
-  const { isUploadMode, selectedAccount } = dataSource;
+  const { isUploadMode, selectedAccount: uploadAccount } = dataSource;
+  const { selectedAccountId: sfAccountId, loading: accountLoading } = useAccount();
+  
   const [data, setData] = useState<T | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const prevSource = useRef<string>('');
 
   useEffect(() => {
-    const sourceKey = `${isUploadMode}_${selectedAccount?.id}`;
+    // 1. Guard: Wait for account state to initialize
+    if (!isUploadMode && !sfAccountId && accountLoading) {
+      return;
+    }
+
+    const activeAccountId = isUploadMode ? uploadAccount?.id : sfAccountId;
+    
+    // 2. Guard: If not in upload mode, we MUST have a SF account ID
+    if (!isUploadMode && !activeAccountId) {
+      setData(null);
+      setLoading(false);
+      return;
+    }
+
+    const sourceKey = `${isUploadMode}_${activeAccountId}`;
+    
     if (prevSource.current === sourceKey && data !== null) return;
     prevSource.current = sourceKey;
 
@@ -40,16 +58,14 @@ export function usePageData<T>(
     }
 
     // Salesforce path
-    const endpoint = selectedAccount?.id
-      ? `${sfEndpoint}${sfEndpoint.includes('?') ? '&' : '?'}accountId=${selectedAccount.id}`
-      : sfEndpoint;
+    const endpoint = `${sfEndpoint}${sfEndpoint.includes('?') ? '&' : '?'}accountId=${activeAccountId}`;
 
     apiGet<T>(endpoint)
       .then(result => { setData(result); setLoading(false); })
       .catch(err => { setError(err.message); setLoading(false); });
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isUploadMode, selectedAccount?.id, ...deps]);
+  }, [isUploadMode, uploadAccount?.id, sfAccountId, accountLoading, ...deps]);
 
   return { data, loading, error, isUploadMode };
 }
