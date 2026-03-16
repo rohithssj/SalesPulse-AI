@@ -58,10 +58,10 @@ export function SignalsPanel() {
     setIsGenerating(true);
     setModalOpen(true);
 
-    let actionType: GenerationType = 'email';
+    let actionType: GenerationType = 'followup';
     const action = signal.action || '';
     if (action.includes('Proposal')) actionType = 'proposal';
-    else if (action.includes('Pricing')) actionType = 'pricing';
+    else if (action.includes('Pricing')) actionType = 'followup'; // pricing mapped to follow up
     else if (action.includes('Strategy')) actionType = 'strategy';
     else actionType = 'followup';
 
@@ -70,13 +70,13 @@ export function SignalsPanel() {
         type:        actionType,
         accountId:   selectedAccountId || signal.accountId || undefined,
         accountName: selectedAccount?.Name || signal.account,
+        industry:    selectedAccount?.Industry || 'Technology',
         contactName: 'Contact',
         stage:       'Qualification',
         value:       '$0',
         probability: signal.confidence,
         daysLeft:    30,
         signals:     [signal.detail],
-        industry:    'Technology',
         tone:        'Formal',
       });
 

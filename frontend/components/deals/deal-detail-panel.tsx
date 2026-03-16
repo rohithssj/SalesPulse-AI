@@ -125,7 +125,7 @@ export function DealDetailPanel({ dealId = 'DEAL-2024-001' }: DealDetailPanelPro
     setLoadingActions(prev => ({ ...prev, [action.id]: true }));
     try {
       const content = await generateAIContent({
-        type:        'email',
+        type:        'followup',
         accountId:   selectedAccountId || undefined,
         accountName: selectedAccount?.name || dealData.account || 'Account',
         contactName: dealData.contact || 'Contact',
@@ -133,7 +133,7 @@ export function DealDetailPanel({ dealId = 'DEAL-2024-001' }: DealDetailPanelPro
         value:       dealData.formattedValue || dealData.value || '$0',
         probability: dealData.probability || 65,
         daysLeft:    10,
-        context:     `Generate an email to execute this action: "${action.action}". Account: ${selectedAccount?.name}. Priority: ${action.priority}. Deadline: ${action.timeline}. Make it direct and actionable.`,
+        context:     `Direct action: "${action.action}". Priority: ${action.priority}. Deadline: ${action.timeline}.`,
       });
 
       setActionResults(prev => ({ ...prev, [action.id]: content }));
@@ -185,18 +185,16 @@ export function DealDetailPanel({ dealId = 'DEAL-2024-001' }: DealDetailPanelPro
     setGeneratingEmail(prev => ({ ...prev, [member.name]: true }));
     try {
       const content = await generateAIContent({
-        type:        'email',
+        type:        'teamOutreach',
         accountId:   selectedAccountId || undefined,
         accountName: selectedAccount?.name || dealData.account || 'Account',
-        contactName: member.name,
-        contactRole: member.role,
+        industry:    selectedAccount?.industry || 'Technology',
+        recipientRole: member.role,
         stage:       dealData.stage || 'Qualification',
         value:       dealData.formattedValue || dealData.value || '$0',
         probability: dealData.probability || 65,
         daysLeft:    dealData.daysLeft || 30,
-        signals:     [member.status === 'engaged'
-          ? 'Actively engaged — maintain momentum'
-          : 'Needs re-engagement — warm outreach required'],
+        context:     `Status: ${member.status}. Action needed from ${member.role}.`,
       });
 
       setEmailResults(prev => ({ ...prev, [member.name]: content }));
@@ -215,6 +213,7 @@ export function DealDetailPanel({ dealId = 'DEAL-2024-001' }: DealDetailPanelPro
         type:        'callprep',
         accountId:   selectedAccountId || undefined,
         accountName: selectedAccount?.name || dealData.account || 'Account',
+        industry:    selectedAccount?.industry || 'Technology',
         contactName: member.name,
         contactRole: member.role,
         stage:       dealData.stage || 'Qualification',

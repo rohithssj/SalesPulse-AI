@@ -225,8 +225,8 @@ const useIntelAgent = () => {
         const deals = getSelectedAccountDeals();
         const signals = getSelectedAccountSignals();
         const topDeal = deals[0];
-        const generated = await generateAIContent({
-          type: 'strategy',
+      const generated = await generateAIContent({
+          type: 'accountBrief',
           accountId: effectiveId,
           accountName: effectiveAccount?.name || 'Account',
           stage: topDeal?.stage,
@@ -234,7 +234,8 @@ const useIntelAgent = () => {
           probability: topDeal?.probability,
           daysLeft: topDeal?.daysLeft,
           signals,
-          context: `Generate an account intelligence brief for ${effectiveAccount?.name || 'Account'}. Include: 1) A 2-sentence account summary, 2) Key discussion points (3 bullets), 3) Detected interests based on recent activity, 4) Recommended next action. Plain text with clear labels. No JSON.`,
+          industry: dsAccount?.industry || 'Technology',
+          context: `Generate an account intelligence brief for ${effectiveAccount?.name || 'Account'}.`,
         });
         setBrief({
           accountName: effectiveAccount?.name || 'Account',
@@ -330,8 +331,8 @@ export function ComprehensiveAIWorkspace() {
         });
       }
 
-      let aiType: GenerationType = 'email';
-      if (selectedContentType === 'summary') aiType = 'meetingPrep';
+      let aiType: GenerationType = 'followup';
+      if (selectedContentType === 'summary') aiType = 'dealSummary';
       if (selectedContentType === 'proposal_draft') aiType = 'proposal';
       if (selectedContentType === 'followup') aiType = 'followup';
 
@@ -339,13 +340,15 @@ export function ComprehensiveAIWorkspace() {
         type: aiType,
         accountId: selectedAccount?.id,
         accountName: commonParams.accountName,
+        industry: selectedAccount?.industry || 'Technology',
         contactName: commonParams.contactName,
+        contactRole: (selectedAccount as any)?.contacts?.[0]?.title || 'Decision Maker',
         stage: commonParams.stage,
         value: commonParams.value,
         probability: commonParams.probability,
         daysLeft: commonParams.daysLeft,
-        tone: selectedTone,
-        context: context
+        tone: selectedTone as any,
+        signals: getSelectedAccountSignals(),
       });
       
       setGeneratedEmail(content);
@@ -357,40 +360,29 @@ export function ComprehensiveAIWorkspace() {
   };
 
   const loadStrategy = async () => {
-    if (isUploadMode) {
-      // Mock strategy for upload mode
-      setStrategyData({
-        recommendation: "Focus on closing the technical gap by providing detailed case studies.",
-        winProbability: selectedAccount?.deals?.[0]?.probability || 65,
-        healthGrade: 'A-',
-        priorities: [
-          { title: "Schedule Demo", desc: "Showcase enterprise features", badge: "🔴 Critical", color: "red-500" },
-          { title: "Review Pricing", desc: "Align with budget expectations", badge: "🟡 High", color: "warning" }
-        ],
-        checklist: ['Verify stakeholder list', 'Send proposal draft']
-      });
-      return;
-    }
     setLoadingStrategy(true);
     try {
-      // For Salesforce mode only, generate a strategy plan based on context
+      const topDeal = selectedAccount?.deals?.[0];
       const content = await generateAIContent({
         type: 'strategy',
         accountId: selectedAccount?.id,
         accountName: selectedAccount?.name || 'Account',
-        stage: selectedAccount?.deals?.[0]?.stage || 'Qualification',
+        stage: topDeal?.stage || 'Qualification',
+        value: topDeal?.formattedValue || '$0',
+        probability: topDeal?.probability || 65,
+        daysLeft: topDeal?.daysLeft || 30,
+        industry: selectedAccount?.industry || 'Technology',
+        signals: getSelectedAccountSignals(),
       });
       
-      // We'll mock the structured object from the generic text for now 
-      // since the legacy backend returned a structured JSON object
       setStrategyData({
-        recommendation: content.substring(0, 150) + '...',
-        winProbability: selectedAccount?.deals?.[0]?.probability || 65,
-        healthGrade: 'A',
+        recommendation: content,
+        winProbability: topDeal?.probability || 65,
+        healthGrade: (topDeal?.probability || 65) >= 80 ? 'A' : (topDeal?.probability || 65) >= 60 ? 'B' : 'C',
         priorities: [
-          { title: "Review AI Plan", desc: "Follow AI strategy guidance", badge: "🟡 High", color: "warning" }
+          { title: "Review AI Plan", desc: "Follow the generated long-term strategy", badge: "🟡 High", color: "warning" }
         ],
-        checklist: ['Execute strategy']
+        checklist: ['Execute strategy items']
       });
     } catch (err) {
       console.error("Strategy fetch failed:", err);

@@ -37,20 +37,13 @@ export function TemplatesPanel() {
 
     try {
       const content = await generateAIContent({
-        type: 'email',
+        type: template.category === 'closing' ? 'proposal' : 'followup',
         accountId: selectedAccountId || undefined,
         accountName: selectedAccount?.Name || 'Account',
+        industry: selectedAccount?.Industry || 'technology',
         stage: 'Evaluation',
         tone: 'Friendly',
-        context: `Use the "${template.name}" email template as a base structure.
-          Personalize it for ${selectedAccount?.Name || 'the account'}.
-          Replace all placeholder variables: 
-          [Name] → ${selectedAccount?.Name || 'Contact'},
-          [Company] → ${selectedAccount?.Name || 'Company'},
-          [Product] → SalesPulse AI platform.
-          Template base: ${template.preview}.
-          Adapt the tone to be friendly and make it feel genuinely written for this specific account.
-          Reference their industry (${selectedAccount?.Industry || 'technology'}) if relevant.`
+        context: `Personalize this template: "${template.name}". Base: ${template.preview}`,
       });
 
       setModalContent(content || template.preview);

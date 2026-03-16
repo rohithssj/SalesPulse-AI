@@ -64,15 +64,13 @@ export function EmailAlertsPanel() {
 
     try {
       const content = await generateAIContent({
-        type: 'followup',
+        type: 'quickDraft',
         accountId: selectedAccountId || undefined,
         accountName: alert.accountName,
-        contactName: 'Prospect',
+        industry: selectedAccount?.Industry || 'Technology',
+        emailContent: alert.title + ": " + alert.description,
         stage: 'Evaluation',
-        value: '$0',
         probability: alert.confidence,
-        signals: [alert.title, alert.description],
-        daysLeft: 14,
         tone: 'Friendly',
       });
       
@@ -91,12 +89,12 @@ export function EmailAlertsPanel() {
     for (let i = 0; i < alertsToDisplay.length; i++) {
       try {
         await generateAIContent({
-          type: 'followup',
+          type: 'quickDraft',
           accountId: selectedAccountId || undefined,
           accountName: alertsToDisplay[i].accountName || 'Account',
+          emailContent: alertsToDisplay[i].title + ": " + alertsToDisplay[i].description,
           stage: 'Evaluation',
           tone: 'Friendly',
-          context: alertsToDisplay[i].description
         });
         successCount++;
       } catch (err) {

@@ -88,15 +88,15 @@ export function DealDetailEmailPanel() {
     if (!selectedAccountId) return;
     setIsGenerating(true);
     try {
+      const lastEmail = emailInteractions.find(i => i.type === 'replied' || i.type === 'opened')?.subject || '';
       const content = await generateAIContent({
-        type: 'email',
+        type: 'suggestedResponse',
         accountId: selectedAccountId,
         accountName: selectedAccount?.Name || 'Account',
+        lastEmail: lastEmail,
         stage: (selectedAccount as any)?.deals?.[0]?.stage || 'Evaluation',
+        industry: selectedAccount?.Industry || 'enterprise',
         tone: 'persuasive',
-        context: `Generate a persuasive response to the latest interaction for ${selectedAccount?.Name}.
-          Account history summary: ${selectedAccount?.Industry || 'enterprise'} sector.
-          Focus on addressing their most recent needs and pushing for the next meeting.`
       });
       setEmailDraft({ subject: 'Suggested Response', content: content });
     } catch (err) {
